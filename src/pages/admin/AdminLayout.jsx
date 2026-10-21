@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, Package, Tag, ShoppingBag, Users, LogOut, Store, Menu, MessageCircle, TrendingUp, Warehouse, Tag as TagIcon, Receipt, BarChart2, Calculator, Cpu, Moon, Sun } from 'lucide-react'
+import { LayoutDashboard, Package, Tag, ShoppingBag, Users, LogOut, Menu, MessageCircle, TrendingUp, Warehouse, Tag as TagIcon, Receipt, BarChart2, Calculator, Cpu, Moon, Sun } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth, useTienda } from '../../store'
@@ -7,12 +7,12 @@ import toast from 'react-hot-toast'
 
 const menu = [
   { to: '/admin',            label: 'Dashboard',        icon: LayoutDashboard, exact: true },
-  { to: '/admin/productos',  label: 'Productos',         icon: Package },
+  { to: '/admin/productos',  label: 'Servicios / Prod.', icon: Package },
   { to: '/admin/categorias', label: 'Categorías',        icon: Tag },
   { to: '/admin/almacen',    label: 'Almacén',           icon: Warehouse },
-  { to: '/admin/pedidos',    label: 'Pedidos WhatsApp',  icon: MessageCircle },
-  { to: '/admin/ventas',     label: 'Ventas',            icon: ShoppingBag },
-  { to: '/admin/compras',    label: 'Compras',           icon: Receipt },
+  { to: '/admin/pedidos',    label: 'Pedidos Web',       icon: MessageCircle },
+  { to: '/admin/ventas',     label: 'Suscripciones',     icon: ShoppingBag },
+  { to: '/admin/compras',    label: 'Cuentas Madre',     icon: Receipt },
   { to: '/admin/inventario', label: 'Inventario',        icon: BarChart2 },
   { to: '/admin/analisis',   label: 'Análisis',          icon: TrendingUp },
   { to: '/admin/precios',    label: 'Etiquetas',         icon: TagIcon },
@@ -24,8 +24,7 @@ export default function AdminLayout() {
   const { pathname } = useLocation()
   const navigate = useNavigate()
   const { perfil } = useAuth()
-  const { tiendaActual, cambiarTienda, modoOscuro, toggleModoOscuro } = useTienda()
-  const esMiller = tiendaActual === 'miller'
+  const { modoOscuro, toggleModoOscuro } = useTienda()
   const [sidebarAbierto, setSidebarAbierto] = useState(false)
 
   useEffect(() => {
@@ -56,48 +55,21 @@ export default function AdminLayout() {
         position: 'fixed', top: 0, left: sidebarAbierto ? 0 : -235, height: '100vh',
         zIndex: 100, transition: 'left 0.25s ease', overflowY: 'auto'
       }}>
-        {/* Cabecera Dinámica según tienda */}
+        {/* Cabecera SuscriTech Global */}
         <div style={{ padding: '18px 16px', borderBottom: '1px solid var(--borde)', display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ 
+          <div style={{
             width: 36, height: 36, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-            background: esMiller ? 'linear-gradient(135deg, #7c3aed, #06b6d4)' : 'var(--naranja)'
+            background: 'linear-gradient(135deg, #7c3aed, #06b6d4)'
           }}>
-            {esMiller ? <Cpu size={18} color="white" /> : <Store size={18} color="white" />}
+            <Cpu size={18} color="white" />
           </div>
           <div>
             <p style={{ fontFamily: 'var(--fuente-display)', fontSize: 14, fontWeight: 700, lineHeight: 1.2, color: 'var(--texto)' }}>
-              {esMiller ? 'Miller Digital' : 'Richard Express'}
+              SuscriTech Global
             </p>
-            <p style={{ fontSize: 11, color: esMiller ? '#06b6d4' : 'var(--naranja)', fontWeight: 600 }}>
-              {esMiller ? 'Servicios & Cuentas' : 'Panel Admin'}
+            <p style={{ fontSize: 11, color: '#06b6d4', fontWeight: 600 }}>
+              Panel de Control
             </p>
-          </div>
-        </div>
-
-        {/* Selector de Tienda */}
-        <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--borde)', background: 'var(--fondo)' }}>
-          <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--texto-suave)', textTransform: 'uppercase', marginBottom: 6, letterSpacing: 0.5 }}>
-            Seleccionar Tienda
-          </p>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4, background: 'var(--borde)', padding: 3, borderRadius: 8 }}>
-            <button
-              onClick={() => { cambiarTienda('richard'); toast.success('Modo: Richard Express Market 🏪') }}
-              style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, padding: '6px 4px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, transition: '0.2s',
-                background: !esMiller ? 'var(--naranja)' : 'transparent',
-                color: !esMiller ? '#fff' : 'var(--texto-suave)'
-              }}>
-              <Store size={12} /> Richard
-            </button>
-            <button
-              onClick={() => { cambiarTienda('miller'); toast.success('Modo: Miller Digital 🚀') }}
-              style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, padding: '6px 4px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, transition: '0.2s',
-                background: esMiller ? 'linear-gradient(135deg, #7c3aed, #06b6d4)' : 'transparent',
-                color: esMiller ? '#fff' : 'var(--texto-suave)'
-              }}>
-              <Cpu size={12} /> Miller
-            </button>
           </div>
         </div>
 
@@ -109,9 +81,9 @@ export default function AdminLayout() {
                 style={{
                   display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px',
                   borderRadius: 10, marginBottom: 2, fontSize: 14, fontWeight: 500,
-                  background: activo ? (esMiller ? 'rgba(124, 58, 237, 0.2)' : 'var(--naranja-light)') : 'transparent',
-                  color: activo ? (esMiller ? '#06b6d4' : 'var(--naranja)') : 'var(--texto-suave)',
-                  transition: 'all 0.15s'
+                  background: activo ? 'rgba(124, 58, 237, 0.2)' : 'transparent',
+                  color: activo ? '#06b6d4' : 'var(--texto-suave)',
+                  transition: 'all 0.15s', textDecoration: 'none'
                 }}>
                 <Icon size={18} />
                 {label}
@@ -140,7 +112,7 @@ export default function AdminLayout() {
             <Menu size={22} />
           </button>
           <span style={{ fontFamily: 'var(--fuente-display)', fontWeight: 700, fontSize: 16 }}>
-            Admin · <span style={{ color: esMiller ? '#06b6d4' : 'var(--naranja)' }}>{esMiller ? 'Miller Digital' : 'Richard Express'}</span>
+            Admin · <span style={{ color: '#06b6d4' }}>SuscriTech Global</span>
           </span>
 
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -157,16 +129,7 @@ export default function AdminLayout() {
               {modoOscuro ? <Sun size={16} /> : <Moon size={16} />}
             </button>
 
-            <button
-              onClick={() => cambiarTienda(esMiller ? 'richard' : 'miller')}
-              style={{
-                padding: '5px 10px', borderRadius: 20, border: '1px solid var(--borde)', cursor: 'pointer', fontSize: 11, fontWeight: 700,
-                background: esMiller ? 'rgba(124, 58, 237, 0.2)' : 'var(--naranja-light)',
-                color: esMiller ? '#06b6d4' : 'var(--naranja)'
-              }}>
-              Cambiar a {esMiller ? '🏪 Richard Express' : '🚀 Miller Digital'}
-            </button>
-            <Link to="/" style={{ fontSize: 12, color: 'var(--texto-suave)', fontWeight: 600 }}>← Ver tienda</Link>
+            <Link to="/" style={{ fontSize: 12, color: '#06b6d4', fontWeight: 600, textDecoration: 'none' }}>← Ver tienda</Link>
           </div>
         </header>
 
