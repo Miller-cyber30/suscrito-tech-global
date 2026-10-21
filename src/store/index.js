@@ -2,8 +2,8 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
 export const useTienda = create((set, get) => ({
-  tiendaActual: 'richard', // Fijo en Richard Express Market
-  modoOscuro: false,
+  tiendaActual: 'miller', // Fijo en modo digital (SuscriTech Global)
+  modoOscuro: true,
   cambiarTienda: () => {},
   toggleModoOscuro: () => set({ modoOscuro: !get().modoOscuro }),
 }))
