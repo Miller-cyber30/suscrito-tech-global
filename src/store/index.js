@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
 export const useTienda = create((set, get) => ({
-  tiendaActual: 'miller', // Fijo en modo digital (SuscriTech Global)
+  tiendaActual: 'miller', // Exclusivo SuscriTech Global
   modoOscuro: true,
   cambiarTienda: () => {},
   toggleModoOscuro: () => set({ modoOscuro: !get().modoOscuro }),
@@ -18,7 +18,7 @@ export const useCarrito = create(
         if (existente) {
           set({ items: items.map(i => i.id === producto.id ? { ...i, cantidad: i.cantidad + 1 } : i) })
         } else {
-          set({ items: [...items, { ...producto, cantidad: 1, tienda: producto.tienda || 'richard' }] })
+          set({ items: [...items, { ...producto, cantidad: 1, tienda: producto.tienda || 'miller' }] })
         }
       },
       quitar: (id) => set({ items: get().items.filter(i => i.id !== id) }),
@@ -27,11 +27,11 @@ export const useCarrito = create(
         set({ items: get().items.map(i => i.id === id ? { ...i, cantidad } : i) })
       },
       limpiar: () => set({ items: [] }),
-      limpiarPorTienda: (tienda) => set({ items: get().items.filter(i => (i.tienda || 'richard') !== tienda) }),
+      limpiarPorTienda: () => set({ items: [] }),
       total: () => get().items.reduce((acc, i) => acc + i.precio * i.cantidad, 0),
       cantidad: () => get().items.reduce((acc, i) => acc + i.cantidad, 0),
     }),
-    { name: 'carrito-richard' }
+    { name: 'carrito-suscritech' }
   )
 )
 
