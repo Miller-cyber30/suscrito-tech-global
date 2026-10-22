@@ -1,24 +1,24 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
-import { Pencil, X, Search, Phone, Mail, Upload, Shield, Bell, FileText } from 'lucide-react'
+import { Pencil, X, Search, Phone, Mail, Upload, FileText, Cpu } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 const ROLES = ['admin', 'vendedor', 'comprador']
 
 export default function AdminUsuarios() {
-  const [usuarios, setUsuarios]       = useState([])
-  const [cargando, setCargando]       = useState(true)
-  const [busqueda, setBusqueda]       = useState('')
-  const [editando, setEditando]       = useState(null)
-  const [nuevoRol, setNuevoRol]       = useState('')
-  const [nuevoNombre, setNuevoNombre] = useState('')
-  const [nuevoEmail, setNuevoEmail]   = useState('')
+  const [usuarios, setUsuarios]           = useState([])
+  const [cargando, setCargando]           = useState(true)
+  const [busqueda, setBusqueda]           = useState('')
+  const [editando, setEditando]           = useState(null)
+  const [nuevoRol, setNuevoRol]           = useState('')
+  const [nuevoNombre, setNuevoNombre]     = useState('')
+  const [nuevoEmail, setNuevoEmail]       = useState('')
   const [nuevoTelefono, setNuevoTelefono] = useState('')
   const [notasSoporte, setNotasSoporte]   = useState('')
   const [recibirAlertas, setRecibirAlertas] = useState(true)
-  const [avatarUrl, setAvatarUrl]     = useState('')
-  const [subiendoFoto, setSubiendoFoto] = useState(false)
-  const [guardando, setGuardando]     = useState(false)
+  const [avatarUrl, setAvatarUrl]         = useState('')
+  const [subiendoFoto, setSubiendoFoto]   = useState(false)
+  const [guardando, setGuardando]         = useState(false)
   const fileRef = useRef()
 
   useEffect(() => { cargar() }, [])
@@ -102,13 +102,13 @@ export default function AdminUsuarios() {
 
   return (
     <div>
-      <h1 style={{ fontFamily: 'var(--fuente-display)', fontSize: 24, fontWeight: 800, marginBottom: 20 }}>
-        Usuarios y Soporte<span style={{ color: 'var(--naranja)' }}>.</span>
+      <h1 style={{ fontFamily: 'var(--fuente-display)', fontSize: 24, fontWeight: 800, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <Cpu size={24} color="#7c3aed" /> Usuarios y Soporte<span style={{ color: '#06b6d4' }}>.</span>
       </h1>
 
-      <div className="card" style={{ padding: '12px 16px', marginBottom: 16, background: 'var(--naranja-light)', border: '1px solid var(--naranja-mid)' }}>
-        <p style={{ fontSize: 13, color: 'var(--naranja-dark)' }}>
-          💡 Aquí puedes administrar roles, cambiar fotos de perfil, actualizar correos/teléfonos de tus clientes y llevar notas de soporte técnico.
+      <div className="card" style={{ padding: '12px 16px', marginBottom: 16, background: 'rgba(124, 58, 237, 0.12)', border: '1px solid rgba(124, 58, 237, 0.35)' }}>
+        <p style={{ fontSize: 13, color: '#06b6d4', fontWeight: 500 }}>
+          💡 Aquí puedes administrar roles, cambiar fotos de perfil, actualizar correos/teléfonos de tus clientes y llevar notas de soporte técnico en SuscriTech Global.
         </p>
       </div>
 
@@ -122,9 +122,9 @@ export default function AdminUsuarios() {
           {filtrados.map(u => (
             <div key={u.id} className="card" style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 16px' }}>
               {u.avatar_url ? (
-                <img src={u.avatar_url} alt={u.nombre} style={{ width: 44, height: 44, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+                <img src={u.avatar_url} alt={u.nombre} style={{ width: 44, height: 44, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, border: '2px solid #06b6d4' }} />
               ) : (
-                <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'var(--naranja-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--fuente-display)', fontWeight: 700, fontSize: 16, color: 'var(--naranja)', flexShrink: 0 }}>
+                <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'linear-gradient(135deg, #7c3aed, #06b6d4)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--fuente-display)', fontWeight: 700, fontSize: 16, color: '#fff', flexShrink: 0 }}>
                   {(u.nombre || 'U')[0].toUpperCase()}
                 </div>
               )}
@@ -137,7 +137,7 @@ export default function AdminUsuarios() {
                   Registrado: {new Date(u.created_at).toLocaleDateString('es-PE')}
                 </p>
                 {u.notas_soporte && (
-                  <p style={{ fontSize: 11, color: '#7c3aed', marginTop: 2, fontWeight: 600 }}>
+                  <p style={{ fontSize: 11, color: '#a855f7', marginTop: 2, fontWeight: 600 }}>
                     🛠️ Soporte: {u.notas_soporte}
                   </p>
                 )}
@@ -153,8 +153,8 @@ export default function AdminUsuarios() {
 
       {/* Modal editar usuario y soporte */}
       {editando && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-          <div className="card" style={{ width: '100%', maxWidth: 480, maxHeight: '90vh', overflowY: 'auto', padding: '24px' }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div className="card" style={{ width: '100%', maxWidth: 480, maxHeight: '90vh', overflowY: 'auto', padding: '24px', borderTop: '4px solid #7c3aed' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
               <h2 style={{ fontFamily: 'var(--fuente-display)', fontWeight: 700, fontSize: 18 }}>Configurar Cuenta y Soporte</h2>
               <button onClick={() => setEditando(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--texto-suave)' }}>
@@ -166,9 +166,9 @@ export default function AdminUsuarios() {
               {/* Avatar */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                 {avatarUrl ? (
-                  <img src={avatarUrl} alt="Avatar" style={{ width: 60, height: 60, borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--naranja)' }} />
+                  <img src={avatarUrl} alt="Avatar" style={{ width: 60, height: 60, borderRadius: '50%', objectFit: 'cover', border: '2px solid #06b6d4' }} />
                 ) : (
-                  <div style={{ width: 60, height: 60, borderRadius: '50%', background: 'var(--naranja-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 22, color: 'var(--naranja)' }}>
+                  <div style={{ width: 60, height: 60, borderRadius: '50%', background: 'linear-gradient(135deg, #7c3aed, #06b6d4)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 22, color: '#fff' }}>
                     {(nuevoNombre || 'U')[0].toUpperCase()}
                   </div>
                 )}
@@ -198,7 +198,7 @@ export default function AdminUsuarios() {
 
               <div>
                 <label style={{ fontSize: 12, fontWeight: 600, marginBottom: 4, display: 'block' }}><FileText size={12}/> Notas de Soporte Técnico / Cuentas asignadas</label>
-                <textarea rows={2} value={notasSoporte} onChange={e => setNotasSoporte(e.target.value)} placeholder="Ej: Miembro en equipo Canva #2, reposición aplicada..." style={{ width: '100%', padding: 8, borderRadius: 8, border: '1px solid var(--borde)', fontSize: 12 }} />
+                <textarea rows={2} value={notasSoporte} onChange={e => setNotasSoporte(e.target.value)} placeholder="Ej: Miembro en equipo Canva #2, reposición aplicada..." style={{ width: '100%', padding: 8, borderRadius: 8, border: '1px solid var(--borde)', fontSize: 12, background: 'var(--fondo)', color: 'var(--texto)' }} />
               </div>
 
               <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, cursor: 'pointer' }}>
@@ -210,14 +210,14 @@ export default function AdminUsuarios() {
                 <label style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, display: 'block' }}>Rol en el sistema</label>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {ROLES.map(r => (
-                    <button key={r} onClick={() => setNuevoRol(r)}
+                    <button key={r} type="button" onClick={() => setNuevoRol(r)}
                       style={{
-                        padding: '10px 14px', borderRadius: 10, border: `2px solid ${nuevoRol === r ? 'var(--naranja)' : 'var(--borde)'}`,
-                        background: nuevoRol === r ? 'var(--naranja-light)' : 'var(--blanco)',
+                        padding: '10px 14px', borderRadius: 10, border: `2px solid ${nuevoRol === r ? '#06b6d4' : 'var(--borde)'}`,
+                        background: nuevoRol === r ? 'rgba(6, 182, 212, 0.12)' : 'var(--blanco)',
                         cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', justifyContent: 'space-between'
                       }}>
                       <div>
-                        <p style={{ fontSize: 13, fontWeight: 600, color: nuevoRol === r ? 'var(--naranja)' : 'var(--texto)' }}>
+                        <p style={{ fontSize: 13, fontWeight: 600, color: nuevoRol === r ? '#06b6d4' : 'var(--texto)' }}>
                           {r.charAt(0).toUpperCase() + r.slice(1)}
                         </p>
                         <p style={{ fontSize: 11, color: 'var(--texto-suave)' }}>
@@ -227,8 +227,8 @@ export default function AdminUsuarios() {
                         </p>
                       </div>
                       {nuevoRol === r && (
-                        <div style={{ width: 18, height: 18, borderRadius: '50%', background: 'var(--naranja)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          <span style={{ color: 'white', fontSize: 11 }}>✓</span>
+                        <div style={{ width: 18, height: 18, borderRadius: '50%', background: '#06b6d4', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <span style={{ color: 'white', fontSize: 11, fontWeight: 700 }}>✓</span>
                         </div>
                       )}
                     </button>
@@ -241,7 +241,7 @@ export default function AdminUsuarios() {
                   Cancelar
                 </button>
                 <button onClick={handleGuardar} className="btn-primary" disabled={guardando}
-                  style={{ flex: 1, justifyContent: 'center', opacity: guardando ? 0.7 : 1 }}>
+                  style={{ flex: 1, justifyContent: 'center', opacity: guardando ? 0.7 : 1, background: 'linear-gradient(135deg, #7c3aed, #06b6d4)', border: 'none' }}>
                   {guardando ? 'Guardando...' : 'Guardar Cambios'}
                 </button>
               </div>
