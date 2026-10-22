@@ -1,14 +1,10 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { useTienda } from '../store'
-import { Store, Cpu, Eye, EyeOff } from 'lucide-react'
+import { Cpu, Eye, EyeOff } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 export default function Login() {
-  const { tiendaActual } = useTienda()
-  const esMiller = tiendaActual === 'miller'
-
   const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
   const [nombre, setNombre]     = useState('')
@@ -26,10 +22,10 @@ export default function Login() {
     if (modo === 'login') {
       const { error } = await supabase.auth.signInWithPassword({ email, password })
       if (error) { setCargando(false); return toast.error('Correo o contraseña incorrectos') }
-      toast.success('¡Bienvenido!')
+      toast.success('¡Bienvenido a SuscriTech Global!')
       const { data: { user } } = await supabase.auth.getUser()
 
-      // Aseguramos que el correo quede sincronizado en su perfil para sus suscripciones
+      // Sincroniza el correo en su perfil para vincular sus suscripciones
       await supabase.from('perfiles').update({ email: user.email }).eq('id', user.id)
 
       const { data: perfil } = await supabase.from('perfiles').select('rol').eq('id', user.id).single()
@@ -61,13 +57,11 @@ export default function Login() {
     setCargando(false)
   }
 
-  const colorPrimario = esMiller ? '#06b6d4' : 'var(--naranja)'
-
   return (
     <div style={{
       minHeight: '100vh',
-      background: esMiller ? 'radial-gradient(circle at top, #1e1b4b, #090d16 70%)' : 'var(--fondo)',
-      color: esMiller ? '#f8fafc' : 'var(--texto)',
+      background: 'radial-gradient(circle at top, #1e1b4b, #090d16 70%)',
+      color: '#f8fafc',
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16
     }}>
       <div style={{ width: '100%', maxWidth: 410 }}>
@@ -75,25 +69,25 @@ export default function Login() {
         <div style={{ textAlign: 'center', marginBottom: 28 }}>
           <div style={{
             width: 56, height: 56,
-            background: esMiller ? 'linear-gradient(135deg, #7c3aed, #06b6d4)' : 'var(--naranja)',
-            borderRadius: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px'
+            background: 'linear-gradient(135deg, #7c3aed, #06b6d4)',
+            borderRadius: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px',
+            boxShadow: '0 8px 24px rgba(124, 58, 237, 0.35)'
           }}>
-            {esMiller ? <Cpu size={28} color="white" /> : <Store size={28} color="white" />}
+            <Cpu size={28} color="white" />
           </div>
           <h1 style={{ fontFamily: 'var(--fuente-display)', fontSize: 26, fontWeight: 800 }}>
-            {esMiller ? 'Miller Digital' : 'Richard Express'}
-            <span style={{ color: colorPrimario }}>.</span>
+            SuscriTech Global<span style={{ color: '#06b6d4' }}>.</span>
           </h1>
-          <p style={{ fontSize: 13, color: esMiller ? '#94a3b8' : 'var(--texto-suave)', marginTop: 6 }}>
+          <p style={{ fontSize: 13, color: '#94a3b8', marginTop: 6 }}>
             {modo === 'login' ? 'Ingresa a tu cuenta para gestionar tus pedidos y suscripciones' : 'Crea tu cuenta gratis en segundos'}
           </p>
         </div>
 
         <div className="card" style={{
           padding: '28px 24px',
-          background: esMiller ? 'rgba(30, 41, 59, 0.9)' : 'var(--blanco)',
-          border: esMiller ? '1px solid rgba(124, 58, 237, 0.4)' : '1px solid var(--borde)',
-          color: esMiller ? '#fff' : 'inherit'
+          background: 'rgba(30, 41, 59, 0.9)',
+          border: '1px solid rgba(124, 58, 237, 0.4)',
+          color: '#fff'
         }}>
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 15 }}>
 
@@ -130,7 +124,7 @@ export default function Login() {
               style={{
                 width: '100%', justifyContent: 'center', padding: '13px', fontSize: 15, marginTop: 4, borderRadius: 10,
                 opacity: cargando ? 0.7 : 1,
-                background: esMiller ? 'linear-gradient(135deg, #7c3aed, #06b6d4)' : 'var(--naranja)',
+                background: 'linear-gradient(135deg, #7c3aed, #06b6d4)',
                 border: 'none'
               }}>
               {cargando ? 'Procesando...' : modo === 'login' ? 'Ingresar' : 'Crear mi cuenta'}
@@ -140,10 +134,10 @@ export default function Login() {
 
         <div style={{ textAlign: 'center', marginTop: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
           <button onClick={() => setModo(modo === 'login' ? 'registro' : 'login')}
-            style={{ background: 'none', border: 'none', fontSize: 13, color: colorPrimario, fontWeight: 600, cursor: 'pointer' }}>
+            style={{ background: 'none', border: 'none', fontSize: 13, color: '#06b6d4', fontWeight: 600, cursor: 'pointer' }}>
             {modo === 'login' ? '¿No tienes cuenta? Regístrate aquí' : '¿Ya tienes cuenta? Inicia sesión'}
           </button>
-          <Link to="/" style={{ fontSize: 13, color: esMiller ? '#94a3b8' : 'var(--texto-suave)' }}>← Volver a la tienda</Link>
+          <Link to="/" style={{ fontSize: 13, color: '#94a3b8', textDecoration: 'none' }}>← Volver al catálogo</Link>
         </div>
 
       </div>
