@@ -1,15 +1,13 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { useAuth, useTienda } from '../store'
+import { useAuth } from '../store'
 import Navbar from '../components/Navbar'
-import { User, Camera, Clock, CheckCircle, AlertTriangle, RefreshCw, Mail, Phone, Save } from 'lucide-react'
+import { Camera, Clock, RefreshCw, Save } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 export default function MiCuenta() {
   const { usuario, perfil, setPerfil } = useAuth()
-  const { tiendaActual } = useTienda()
-  const esMiller = tiendaActual === 'miller'
   const navigate = useNavigate()
   const fileRef = useRef()
 
@@ -83,16 +81,16 @@ export default function MiCuenta() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: esMiller ? 'radial-gradient(circle at top, #1e1b4b, #0f172a 70%)' : 'var(--fondo)', color: esMiller ? '#f8fafc' : 'var(--texto)' }}>
+    <div style={{ minHeight: '100vh', background: 'radial-gradient(circle at top, #1e1b4b, #0f172a 70%)', color: '#f8fafc' }}>
       <Navbar />
       <div style={{ maxWidth: 800, margin: '0 auto', padding: '28px 16px' }}>
         <h1 style={{ fontFamily: 'var(--fuente-display)', fontSize: 26, fontWeight: 800, marginBottom: 20 }}>
-          Mi Cuenta y Suscripciones
+          Mi Cuenta y Suscripciones<span style={{ color: '#06b6d4' }}>.</span>
         </h1>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 20 }}>
           {/* Tarjeta de Configuración de Perfil */}
-          <div className="card" style={{ padding: 22, background: esMiller ? 'rgba(30,41,59,0.85)' : '#fff', color: esMiller ? '#fff' : 'inherit' }}>
+          <div className="card" style={{ padding: 22, background: 'rgba(30,41,59,0.85)', color: '#fff', border: '1px solid rgba(124, 58, 237, 0.3)' }}>
             <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>Datos de tu Perfil</h2>
             <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
               {avatarUrl ? (
@@ -104,7 +102,7 @@ export default function MiCuenta() {
               )}
               <div>
                 <input ref={fileRef} type="file" accept="image/*" onChange={subirFoto} style={{ display: 'none' }} />
-                <button onClick={() => fileRef.current.click()} className="btn-ghost" style={{ fontSize: 12, color: esMiller ? '#06b6d4' : 'inherit' }}>
+                <button onClick={() => fileRef.current.click()} className="btn-ghost" style={{ fontSize: 12, color: '#06b6d4' }}>
                   <Camera size={14} /> {subiendo ? 'Subiendo...' : 'Cambiar foto'}
                 </button>
                 <p style={{ fontSize: 11, opacity: 0.7, marginTop: 4 }}>{usuario?.email}</p>
@@ -125,14 +123,14 @@ export default function MiCuenta() {
                 Recibir avisos en mi correo cuando mi servicio esté próximo a vencer
               </label>
 
-              <button onClick={guardarPerfil} disabled={guardando} className="btn-primary" style={{ justifyContent: 'center', marginTop: 6, background: esMiller ? 'linear-gradient(135deg, #7c3aed, #06b6d4)' : 'var(--naranja)', border: 'none' }}>
+              <button onClick={guardarPerfil} disabled={guardando} className="btn-primary" style={{ justifyContent: 'center', marginTop: 6, background: 'linear-gradient(135deg, #7c3aed, #06b6d4)', border: 'none' }}>
                 <Save size={15} /> {guardando ? 'Guardando...' : 'Guardar configuración'}
               </button>
             </div>
           </div>
 
           {/* Tarjeta de Suscripciones y Fechas de Vencimiento */}
-          <div className="card" style={{ padding: 22, background: esMiller ? 'rgba(30,41,59,0.85)' : '#fff', color: esMiller ? '#fff' : 'inherit' }}>
+          <div className="card" style={{ padding: 22, background: 'rgba(30,41,59,0.85)', color: '#fff', border: '1px solid rgba(124, 58, 237, 0.3)' }}>
             <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
               <Clock size={18} color="#06b6d4" /> Mis Servicios y Vencimientos
             </h2>
@@ -158,7 +156,7 @@ export default function MiCuenta() {
                         📅 Adquirido: {s.ventas?.created_at ? new Date(s.ventas.created_at).toLocaleDateString('es-PE') : 'N/A'} · ⏳ <b>Vence: {s.fecha_vencimiento}</b>
                       </p>
                       <a
-                        href={`https://wa.me/51924545856?text=${encodeURIComponent(`¡Hola Miller Digital! Quiero renovar mi servicio de *${s.nombre_producto}* asociado a mi correo${usuario.email}`)}`}
+                        href={`https://wa.me/51924545856?text=${encodeURIComponent(`¡Hola SuscriTech Global! 🚀 Quiero renovar mi servicio de *${s.nombre_producto}* asociado a mi correo${usuario.email}`)}`}
                         target="_blank" rel="noopener noreferrer"
                         style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 8, fontSize: 11, fontWeight: 700, color: '#06b6d4', textDecoration: 'none' }}>
                         <RefreshCw size={12} /> Solicitar Renovación por WhatsApp →
