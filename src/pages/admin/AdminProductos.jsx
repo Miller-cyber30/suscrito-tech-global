@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
-import { useTienda } from '../../store'
 import { Plus, Pencil, Trash2, Upload, X, Package, Search, Download, Cpu } from 'lucide-react'
 import { exportarCSV } from '../../lib/exportar'
 import Paginador from '../../components/Paginador'
@@ -9,38 +8,31 @@ import toast from 'react-hot-toast'
 
 const vacioForm = {
   nombre: '', descripcion: '', precio: '', precio_oferta: '',
-  unidad: 'unidad', cantidad_unidad: '', stock: 0, stock_minimo: 1,
+  unidad: 'meses', cantidad_unidad: '', stock: 0, stock_minimo: 1,
   categoria_id: '', activo: true, codigo_barras: ''
 }
 
-const UNIDADES_FISICAS = ['unidad', 'kg', 'g', 'lt', 'ml', 'docena', 'paquete', 'caja', 'bolsa']
-const UNIDADES_DIGITALES = ['meses', 'mes', 'año', 'cuenta', 'cupo', 'licencia', 'servicio']
+const UNIDADES_DIGITALES = ['meses', 'mes', 'año', 'cuenta', 'cupo', 'licencia', 'servicio', 'unidad']
 
 export default function AdminProductos() {
-  const { tiendaActual } = useTienda()
-  const esMiller = tiendaActual === 'miller'
-  const UNIDADES = esMiller ? [...UNIDADES_DIGITALES, ...UNIDADES_FISICAS] : UNIDADES_FISICAS
-
-  const [productos, setProductos]   = useState([])
-  const [categorias, setCategorias] = useState([])
-  const [sucursales, setSucursales] = useState([])
-  const [secciones, setSecciones]   = useState([])
-  const [form, setForm]             = useState(vacioForm)
-  const [editando, setEditando]     = useState(null)
+  const [productos, setProductos]       = useState([])
+  const [categorias, setCategorias]     = useState([])
+  const [form, setForm]                 = useState(vacioForm)
+  const [editando, setEditando]         = useState(null)
   const [modalAbierto, setModalAbierto] = useState(false)
-  const [subiendo, setSubiendo]     = useState(false)
-  const [cargando, setCargando]     = useState(true)
+  const [subiendo, setSubiendo]         = useState(false)
+  const [cargando, setCargando]         = useState(true)
   const [imagenPreview, setImagenPreview] = useState(null)
-  const [imagenFile, setImagenFile] = useState(null)
-  const [busqueda, setBusqueda]     = useState('')
-  const [filtroCat, setFiltroCat]   = useState('')
+  const [imagenFile, setImagenFile]     = useState(null)
+  const [busqueda, setBusqueda]         = useState('')
+  const [filtroCat, setFiltroCat]       = useState('')
   const [filtroOferta, setFiltroOferta] = useState(false)
   const [filtroStock, setFiltroStock]   = useState('')
   const inputRef = useRef()
 
   const [searchParams] = useSearchParams()
 
-  useEffect(() => { cargar() }, [tiendaActual])
+  useEffect(() => { cargar() }, [])
 
   useEffect(() => {
     const editarId = searchParams.get('editar')
@@ -62,16 +54,12 @@ export default function AdminProductos() {
 
   async function cargar() {
     setCargando(true)
-    const [{ data: prods }, { data: cats }, { data: sucs }, { data: secs }] = await Promise.all([
-      supabase.from('productos').select('*, categorias(nombre), sucursales(nombre), secciones(nombre)').order('nombre'),
+    const [{ data: prods }, { data: cats }] = await Promise.all([
+      supabase.from('productos').select('*, categorias(nombre)').order('nombre'),
       supabase.from('categorias').select('id, nombre, tienda').eq('activo', true).order('nombre'),
-      supabase.from('sucursales').select('*').order('nombre'),
-      supabase.from('secciones').select('*').order('nombre'),
     ])
-    setProductos((prods || []).filter(p => (p.tienda || 'richard') === tiendaActual))
-    setCategorias((cats || []).filter(c => (c.tienda || 'richard') === tiendaActual))
-    setSucursales(sucs || [])
-    setSecciones(secs || [])
+    setProductos((prods || []).filter(p => p.tienda !== 'richard'))
+    setCategorias((cats || []).filter(c => c.tienda !== 'richard'))
     setCargando(false)
   }
 
@@ -80,13 +68,8 @@ export default function AdminProductos() {
     return `${cantidad} ${unidad}`
   }
 
-  const seccionesDelForm = form.sucursal_id
-    ? secciones.filter(s => s.sucursal_id === form.sucursal_id)
-    : secciones
-
   function abrirNuevo() {
-    const primeraS = sucursales[0]?.id || ''
-    setForm({ ...vacioForm, unidad: esMiller ? 'meses' : 'unidad', sucursal_id: esMiller ? '' : primeraS })
+    setForm({ ...vacioForm, unidad: 'meses' })
     setEditando(null)
     setImagenPreview(null)
     setImagenFile(null)
@@ -103,8 +86,6 @@ export default function AdminProductos() {
       cantidad_unidad: tieneNumero ? partes[0] : '',
       stock: p.stock, stock_minimo: p.stock_minimo,
       categoria_id: p.categoria_id || '',
-      sucursal_id: p.sucursal_id || '',
-      seccion_id: p.seccion_id || '',
       activo: p.activo, codigo_barras: p.codigo_barras || ''
     })
     setEditando(p)
@@ -144,33 +125,34 @@ export default function AdminProductos() {
       return p.nombre.toLowerCase().trim() === form.nombre.toLowerCase().trim() &&
              p.unidad?.toLowerCase().trim() === unidadFinal.toLowerCase().trim()
     })
-    if (duplicado) return toast.error(`Ya existe "${form.nombre}" con unidad "${unidadFinal}"`, { duration: 4000 })
+    if (duplicado) return toast.error(`Ya existe "${form.nombre}" con plan "${unidadFinal}"`, { duration: 4000 })
     setSubiendo(true)
     try {
       let imagen_url = editando?.imagen_url || null
       if (imagenFile) imagen_url = await subirImagen(imagenFile, form.nombre)
       const payload = {
-        nombre: form.nombre.trim(), descripcion: form.descripcion,
+        nombre: form.nombre.trim(),
+        descripcion: form.descripcion,
         precio: Number(form.precio),
         precio_oferta: form.precio_oferta ? Number(form.precio_oferta) : null,
         unidad: unidadFinal,
-        stock: Number(form.stock), stock_minimo: Number(form.stock_minimo),
+        stock: Number(form.stock),
+        stock_minimo: Number(form.stock_minimo),
         categoria_id: form.categoria_id || null,
-        sucursal_id: form.sucursal_id || null,
-        seccion_id: form.seccion_id || null,
         activo: form.activo,
-        tienda: tiendaActual,
+        tienda: 'miller',
         codigo_barras: form.codigo_barras || null,
-        imagen_url, updated_at: new Date().toISOString()
+        imagen_url,
+        updated_at: new Date().toISOString()
       }
       if (editando) {
         const { error } = await supabase.from('productos').update(payload).eq('id', editando.id)
         if (error) throw error
-        toast.success('Actualizado correctamente')
+        toast.success('Servicio actualizado correctamente')
       } else {
         const { error } = await supabase.from('productos').insert(payload)
         if (error) throw error
-        toast.success(esMiller ? 'Servicio digital creado 🚀' : 'Producto creado ✅')
+        toast.success('Servicio digital creado 🚀')
       }
       setModalAbierto(false)
       cargar()
@@ -187,23 +169,24 @@ export default function AdminProductos() {
   }
 
   function handleExportar() {
-    if (productos.length === 0) return toast.error('No hay productos para exportar')
-    exportarCSV(`productos_${tiendaActual}`, [
-      ['Nombre', 'Categoría', 'Sucursal', 'Sección', 'Precio (S/)', 'Precio Oferta', 'Unidad', 'Stock / Cupos', 'Stock Mínimo', 'Código Barras', 'Activo'],
+    if (productos.length === 0) return toast.error('No hay servicios para exportar')
+    exportarCSV('servicios_suscritech', [
+      ['Nombre', 'Categoría', 'Precio (S/)', 'Precio Oferta', 'Plan / Unidad', 'Cupos en Stock', 'Stock Mínimo', 'Activo'],
       ...productos.map(p => [
-        p.nombre, p.categorias?.nombre || 'Sin categoría',
-        p.sucursales?.nombre || 'Sin sucursal',
-        p.secciones?.nombre  || 'Sin sección',
+        p.nombre,
+        p.categorias?.nombre || 'Sin categoría',
         Number(p.precio).toFixed(2),
         p.precio_oferta ? Number(p.precio_oferta).toFixed(2) : '',
-        p.unidad, p.stock, p.stock_minimo,
-        p.codigo_barras || '', p.activo ? 'Sí' : 'No'
+        p.unidad,
+        p.stock,
+        p.stock_minimo,
+        p.activo ? 'Sí' : 'No'
       ])
     ])
     toast.success('Excel exportado ✅')
   }
 
-const [paginaActual, setPaginaActual] = useState(1)
+  const [paginaActual, setPaginaActual]     = useState(1)
   const [itemsPorPagina, setItemsPorPagina] = useState(50)
 
   const filtrados = productos.filter(p => {
@@ -217,20 +200,20 @@ const [paginaActual, setPaginaActual] = useState(1)
   const limiteValido = Math.max(1, Number(itemsPorPagina) || 50)
   const filtradosPaginados = filtrados.slice((paginaActual - 1) * limiteValido, paginaActual * limiteValido)
 
-  const colorPrimario = esMiller ? '#7c3aed' : 'var(--naranja)'
+  const colorPrimario = '#7c3aed'
 
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 10 }}>
         <h1 style={{ fontFamily: 'var(--fuente-display)', fontSize: 24, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 8 }}>
-          {esMiller ? <><Cpu size={24} color="#7c3aed" /> Servicios Digitales<span style={{ color: '#06b6d4' }}>.</span></> : <>Productos<span style={{ color: 'var(--naranja)' }}>.</span></>}
+          <Cpu size={24} color="#7c3aed" /> Servicios Digitales<span style={{ color: '#06b6d4' }}>.</span>
         </h1>
         <div style={{ display: 'flex', gap: 8 }}>
           <button onClick={handleExportar} className="btn-ghost" style={{ fontSize: 13 }}>
             <Download size={14} /> Excel
           </button>
-          <button onClick={abrirNuevo} className="btn-primary" style={{ background: esMiller ? 'linear-gradient(135deg, #7c3aed, #06b6d4)' : 'var(--naranja)', border: 'none' }}>
-            <Plus size={16} /> {esMiller ? 'Nuevo servicio' : 'Nuevo producto'}
+          <button onClick={abrirNuevo} className="btn-primary" style={{ background: 'linear-gradient(135deg, #7c3aed, #06b6d4)', border: 'none' }}>
+            <Plus size={16} /> Nuevo servicio
           </button>
         </div>
       </div>
@@ -238,7 +221,7 @@ const [paginaActual, setPaginaActual] = useState(1)
       <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
         <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
           <Search size={14} style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: 'var(--texto-suave)' }} />
-          <input value={busqueda} onChange={e => setBusqueda(e.target.value)} placeholder={esMiller ? "Buscar servicio (Canva, Google, HBO...)" : "Buscar producto..."} style={{ paddingLeft: 32 }} />
+          <input value={busqueda} onChange={e => setBusqueda(e.target.value)} placeholder="Buscar servicio (Canva, Google, HBO...)" style={{ paddingLeft: 32 }} />
         </div>
         <select value={filtroCat} onChange={e => setFiltroCat(e.target.value)} style={{ minWidth: 160 }}>
           <option value="">Todas las categorías</option>
@@ -249,12 +232,12 @@ const [paginaActual, setPaginaActual] = useState(1)
             type="number" min="0"
             value={filtroStock}
             onChange={e => setFiltroStock(e.target.value)}
-            placeholder={esMiller ? "Cupos exactos..." : "Stock exacto..."}
+            placeholder="Cupos exactos..."
             style={{ paddingLeft: 12, width: '100%' }}
           />
         </div>
         <button onClick={() => setFiltroOferta(!filtroOferta)}
-          style={{ padding: '9px 14px', borderRadius: 8, border: `1.5px solid ${filtroOferta ? colorPrimario : 'var(--borde)'}`, background: filtroOferta ? (esMiller ? '#7c3aed15' : 'var(--naranja-light)') : 'var(--blanco)', color: filtroOferta ? colorPrimario : 'var(--texto-suave)', fontSize: 13, fontWeight: 500, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+          style={{ padding: '9px 14px', borderRadius: 8, border: `1.5px solid ${filtroOferta ? colorPrimario : 'var(--borde)'}`, background: filtroOferta ? '#7c3aed15' : 'var(--blanco)', color: filtroOferta ? '#06b6d4' : 'var(--texto-suave)', fontSize: 13, fontWeight: 500, cursor: 'pointer', whiteSpace: 'nowrap' }}>
           🏷️ Solo ofertas
         </button>
         {(filtroCat || filtroStock !== '' || filtroOferta) && (
@@ -265,63 +248,57 @@ const [paginaActual, setPaginaActual] = useState(1)
         )}
       </div>
 
-      <p style={{ fontSize: 13, color: 'var(--texto-suave)', marginBottom: 14 }}>{filtrados.length} {esMiller ? 'servicios' : 'productos'}</p>
+      <p style={{ fontSize: 13, color: 'var(--texto-suave)', marginBottom: 14 }}>{filtrados.length} servicios</p>
 
       {cargando ? <div className="spinner" /> : (
         <>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {filtradosPaginados.map(p => (
-            <div key={p.id} className="card" style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 16px' }}>
-              {p.imagen_url
-                ? <img src={p.imagen_url} alt={p.nombre} style={{ width: 52, height: 52, borderRadius: 10, objectFit: 'cover', flexShrink: 0 }} />
-                : <div style={{ width: 52, height: 52, borderRadius: 10, background: 'var(--fondo)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <Package size={22} color="var(--borde)" />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {filtradosPaginados.map(p => (
+              <div key={p.id} className="card" style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 16px' }}>
+                {p.imagen_url
+                  ? <img src={p.imagen_url} alt={p.nombre} style={{ width: 52, height: 52, borderRadius: 10, objectFit: 'cover', flexShrink: 0 }} />
+                  : <div style={{ width: 52, height: 52, borderRadius: 10, background: 'var(--fondo)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <Package size={22} color="var(--borde)" />
+                    </div>
+                }
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ fontWeight: 600, fontSize: 14 }}>{p.nombre}</p>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 2 }}>
+                    <span style={{ fontSize: 12, color: 'var(--texto-suave)' }}>{p.categorias?.nombre || 'Sin categoría'}</span>
+                    <span style={{ fontSize: 12, color: 'var(--texto-suave)' }}>·</span>
+                    <span style={{ fontSize: 12, color: '#06b6d4', fontWeight: 600 }}>{p.unidad}</span>
                   </div>
-              }
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ fontWeight: 600, fontSize: 14 }}>{p.nombre}</p>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 2 }}>
-                  <span style={{ fontSize: 12, color: 'var(--texto-suave)' }}>{p.categorias?.nombre || 'Sin categoría'}</span>
-                  <span style={{ fontSize: 12, color: 'var(--texto-suave)' }}>·</span>
-                  <span style={{ fontSize: 12, color: colorPrimario, fontWeight: 500 }}>{p.unidad}</span>
-                  {p.secciones?.nombre && (
-                    <>
-                      <span style={{ fontSize: 12, color: 'var(--texto-suave)' }}>·</span>
-                      <span style={{ fontSize: 12, color: '#7C3AED', fontWeight: 500 }}>📍 {p.secciones.nombre}</span>
-                    </>
-                  )}
+                </div>
+                <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                  <p style={{ fontFamily: 'var(--fuente-display)', fontWeight: 700, fontSize: 16, color: '#06b6d4' }}>S/ {Number(p.precio).toFixed(2)}</p>
+                  <p style={{ fontSize: 12, color: p.stock <= p.stock_minimo ? '#f59e0b' : 'var(--texto-suave)' }}>Cupos: {p.stock}</p>
+                </div>
+                <span className={`badge ${p.activo ? 'badge-verde' : 'badge-gris'}`} style={{ flexShrink: 0 }}>{p.activo ? 'Activo' : 'Inactivo'}</span>
+                <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                  <button onClick={() => abrirEditar(p)} className="btn-ghost" style={{ padding: '7px 10px' }}><Pencil size={14} /></button>
+                  <button onClick={() => handleEliminar(p)} className="btn-danger" style={{ padding: '7px 10px' }}><Trash2 size={14} /></button>
                 </div>
               </div>
-              <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                <p style={{ fontFamily: 'var(--fuente-display)', fontWeight: 700, fontSize: 16, color: colorPrimario }}>S/ {Number(p.precio).toFixed(2)}</p>
-                <p style={{ fontSize: 12, color: p.stock <= p.stock_minimo ? '#E65100' : 'var(--texto-suave)' }}>{esMiller ? 'Cupos' : 'Stock'}: {p.stock}</p>
-              </div>
-              <span className={`badge ${p.activo ? 'badge-verde' : 'badge-gris'}`} style={{ flexShrink: 0 }}>{p.activo ? 'Activo' : 'Inactivo'}</span>
-              <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                <button onClick={() => abrirEditar(p)} className="btn-ghost" style={{ padding: '7px 10px' }}><Pencil size={14} /></button>
-                <button onClick={() => handleEliminar(p)} className="btn-danger" style={{ padding: '7px 10px' }}><Trash2 size={14} /></button>
-              </div>
-            </div>
-          ))}
-        </div>
-        <Paginador
-          totalItems={filtrados.length}
-          itemsPorPagina={itemsPorPagina}
-          setItemsPorPagina={setItemsPorPagina}
-          paginaActual={paginaActual}
-          setPaginaActual={setPaginaActual}
-          esMiller={esMiller}
-        />
+            ))}
+          </div>
+          <Paginador
+            totalItems={filtrados.length}
+            itemsPorPagina={itemsPorPagina}
+            setItemsPorPagina={setItemsPorPagina}
+            paginaActual={paginaActual}
+            setPaginaActual={setPaginaActual}
+            esMiller={true}
+          />
         </>
       )}
 
       {/* Modal */}
       {modalAbierto && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-          <div className="card" style={{ width: '100%', maxWidth: 560, padding: '24px', maxHeight: '92vh', overflowY: 'auto' }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div className="card" style={{ width: '100%', maxWidth: 540, padding: '24px', maxHeight: '92vh', overflowY: 'auto', borderTop: '4px solid #7c3aed' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
               <h2 style={{ fontFamily: 'var(--fuente-display)', fontWeight: 700, fontSize: 18 }}>
-                {editando ? (esMiller ? 'Editar servicio' : 'Editar producto') : (esMiller ? 'Nuevo servicio digital' : 'Nuevo producto')}
+                {editando ? 'Editar servicio digital' : 'Nuevo servicio digital'}
               </h2>
               <button onClick={() => setModalAbierto(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--texto-suave)' }}><X size={20} /></button>
             </div>
@@ -329,27 +306,27 @@ const [paginaActual, setPaginaActual] = useState(1)
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <div style={{ gridColumn: '1/-1' }}>
                 <label style={{ fontSize: 13, fontWeight: 500, marginBottom: 6, display: 'block' }}>Nombre *</label>
-                <input value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} placeholder={esMiller ? "Ej: Canva Pro - Plan 3 Meses" : "Ej: Arroz"} />
+                <input value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} placeholder="Ej: Canva Pro - Plan 3 Meses" />
               </div>
               <div style={{ gridColumn: '1/-1' }}>
                 <label style={{ fontSize: 13, fontWeight: 500, marginBottom: 6, display: 'block' }}>Descripción</label>
-                <input value={form.descripcion} onChange={e => setForm({ ...form, descripcion: e.target.value })} placeholder={esMiller ? "Ej: Activación a tu correo personal 100% seguro" : "Descripción opcional"} />
+                <input value={form.descripcion} onChange={e => setForm({ ...form, descripcion: e.target.value })} placeholder="Ej: Activación en tu correo personal 100% seguro" />
               </div>
 
-              {/* Unidad */}
+              {/* Unidad / Duración */}
               <div style={{ gridColumn: '1/-1' }}>
                 <label style={{ fontSize: 13, fontWeight: 500, marginBottom: 6, display: 'block' }}>
-                  {esMiller ? 'Duración / Tipo de plan' : 'Unidad de medida'}
+                  Duración / Tipo de plan
                   <span style={{ fontSize: 11, color: 'var(--texto-suave)', marginLeft: 8 }}>
-                    Vista previa: <strong style={{ color: colorPrimario }}>{etiquetaUnidad(form.unidad, form.cantidad_unidad)}</strong>
+                    Vista previa: <strong style={{ color: '#06b6d4' }}>{etiquetaUnidad(form.unidad, form.cantidad_unidad)}</strong>
                   </span>
                 </label>
                 <div style={{ display: 'flex', gap: 10 }}>
-                  <input type="number" min="0" step="0.1" value={form.cantidad_unidad}
+                  <input type="number" min="0" step="1" value={form.cantidad_unidad}
                     onChange={e => setForm({ ...form, cantidad_unidad: e.target.value })}
                     placeholder="Ej: 3" style={{ width: 100, flexShrink: 0 }} />
                   <select value={form.unidad} onChange={e => setForm({ ...form, unidad: e.target.value })} style={{ flex: 1 }}>
-                    {UNIDADES.map(u => <option key={u} value={u}>{u}</option>)}
+                    {UNIDADES_DIGITALES.map(u => <option key={u} value={u}>{u}</option>)}
                   </select>
                 </div>
               </div>
@@ -360,7 +337,7 @@ const [paginaActual, setPaginaActual] = useState(1)
               </div>
               <div>
                 <label style={{ fontSize: 13, fontWeight: 500, marginBottom: 6, display: 'block' }}>Precio oferta (S/)</label>
-                <input type="number" min="0" step="0.01" value={form.precio_oferta} onChange={e => setForm({ ...form, precio_oferta: e.target.value })} placeholder="Dejar vacío si no hay" />
+                <input type="number" min="0" step="0.01" value={form.precio_oferta} onChange={e => setForm({ ...form, precio_oferta: e.target.value })} placeholder="Opcional" />
               </div>
               <div>
                 <label style={{ fontSize: 13, fontWeight: 500, marginBottom: 6, display: 'block' }}>Categoría</label>
@@ -370,41 +347,21 @@ const [paginaActual, setPaginaActual] = useState(1)
                 </select>
               </div>
               <div>
-                <label style={{ fontSize: 13, fontWeight: 500, marginBottom: 6, display: 'block' }}>{esMiller ? 'Cupos en stock' : 'Stock actual'}</label>
+                <label style={{ fontSize: 13, fontWeight: 500, marginBottom: 6, display: 'block' }}>Cupos en stock</label>
                 <input type="number" min="0" value={form.stock} onChange={e => setForm({ ...form, stock: e.target.value })} />
               </div>
               <div>
-                <label style={{ fontSize: 13, fontWeight: 500, marginBottom: 6, display: 'block' }}>Stock mínimo</label>
+                <label style={{ fontSize: 13, fontWeight: 500, marginBottom: 6, display: 'block' }}>Alerta cupos mínimos</label>
                 <input type="number" min="0" value={form.stock_minimo} onChange={e => setForm({ ...form, stock_minimo: e.target.value })} />
               </div>
               <div>
-                <label style={{ fontSize: 13, fontWeight: 500, marginBottom: 6, display: 'block' }}>Código de barras</label>
-                <input value={form.codigo_barras} onChange={e => setForm({ ...form, codigo_barras: e.target.value })} placeholder="Opcional" />
+                <label style={{ fontSize: 13, fontWeight: 500, marginBottom: 6, display: 'block' }}>Código interno (Opcional)</label>
+                <input value={form.codigo_barras} onChange={e => setForm({ ...form, codigo_barras: e.target.value })} placeholder="Ej: CANVA-3M" />
               </div>
-
-              {!esMiller && (
-                <>
-                  <div>
-                    <label style={{ fontSize: 13, fontWeight: 500, marginBottom: 6, display: 'block' }}>Sucursal</label>
-                    <select value={form.sucursal_id}
-                      onChange={e => setForm({ ...form, sucursal_id: e.target.value, seccion_id: '' })}>
-                      <option value="">Sin sucursal</option>
-                      {sucursales.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label style={{ fontSize: 13, fontWeight: 500, marginBottom: 6, display: 'block' }}>Sección / Ubicación</label>
-                    <select value={form.seccion_id} onChange={e => setForm({ ...form, seccion_id: e.target.value })}>
-                      <option value="">Sin sección</option>
-                      {seccionesDelForm.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
-                    </select>
-                  </div>
-                </>
-              )}
 
               {/* Imagen */}
               <div style={{ gridColumn: '1/-1' }}>
-                <label style={{ fontSize: 13, fontWeight: 500, marginBottom: 8, display: 'block' }}>Foto del {esMiller ? 'servicio' : 'producto'}</label>
+                <label style={{ fontSize: 13, fontWeight: 500, marginBottom: 8, display: 'block' }}>Logo / Imagen del servicio</label>
                 <input ref={inputRef} type="file" accept="image/*" onChange={handleImagen} style={{ display: 'none' }} />
                 {imagenPreview ? (
                   <div style={{ position: 'relative', borderRadius: 10, overflow: 'hidden', border: '1px solid var(--borde)', height: 160 }}>
@@ -415,14 +372,14 @@ const [paginaActual, setPaginaActual] = useState(1)
                     </button>
                     <button onClick={() => inputRef.current.click()}
                       style={{ position: 'absolute', bottom: 8, right: 8, background: 'rgba(0,0,0,0.5)', border: 'none', borderRadius: 8, padding: '5px 10px', cursor: 'pointer', color: 'white', fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }}>
-                      <Upload size={12} /> Cambiar foto
+                      <Upload size={12} /> Cambiar imagen
                     </button>
                   </div>
                 ) : (
                   <button onClick={() => inputRef.current.click()}
                     style={{ width: '100%', height: 120, border: '2px dashed var(--borde)', borderRadius: 10, background: 'var(--fondo)', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, color: 'var(--texto-suave)' }}>
                     <Upload size={22} />
-                    <span style={{ fontSize: 13 }}>Subir foto</span>
+                    <span style={{ fontSize: 13 }}>Subir imagen</span>
                   </button>
                 )}
               </div>
@@ -434,8 +391,8 @@ const [paginaActual, setPaginaActual] = useState(1)
 
               <div style={{ gridColumn: '1/-1', display: 'flex', gap: 10, marginTop: 4 }}>
                 <button onClick={() => setModalAbierto(false)} className="btn-ghost" style={{ flex: 1, justifyContent: 'center' }}>Cancelar</button>
-                <button onClick={handleGuardar} className="btn-primary" disabled={subiendo} style={{ flex: 1, justifyContent: 'center', opacity: subiendo ? 0.7 : 1, background: colorPrimario, border: 'none' }}>
-                  {subiendo ? 'Guardando...' : editando ? 'Guardar cambios' : 'Crear'}
+                <button onClick={handleGuardar} className="btn-primary" disabled={subiendo} style={{ flex: 1, justifyContent: 'center', opacity: subiendo ? 0.7 : 1, background: 'linear-gradient(135deg, #7c3aed, #06b6d4)', border: 'none' }}>
+                  {subiendo ? 'Guardando...' : editando ? 'Guardar cambios' : 'Crear servicio'}
                 </button>
               </div>
             </div>
