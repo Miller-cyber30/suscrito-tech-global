@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
-import { useTienda } from '../../store'
 import { Plus, Pencil, Trash2, Upload, X, Package, Download, Cpu } from 'lucide-react'
 import { exportarCSV } from '../../lib/exportar'
 import toast from 'react-hot-toast'
@@ -8,25 +7,22 @@ import toast from 'react-hot-toast'
 const vacioForm = { nombre: '', descripcion: '', orden: 0, activo: true }
 
 export default function AdminCategorias() {
-  const { tiendaActual } = useTienda()
-  const esMiller = tiendaActual === 'miller'
-
-  const [categorias, setCategorias] = useState([])
-  const [form, setForm]             = useState(vacioForm)
-  const [editando, setEditando]     = useState(null)
+  const [categorias, setCategorias]     = useState([])
+  const [form, setForm]                 = useState(vacioForm)
+  const [editando, setEditando]         = useState(null)
   const [modalAbierto, setModalAbierto] = useState(false)
-  const [subiendo, setSubiendo]     = useState(false)
-  const [cargando, setCargando]     = useState(true)
+  const [subiendo, setSubiendo]         = useState(false)
+  const [cargando, setCargando]         = useState(true)
   const [imagenPreview, setImagenPreview] = useState(null)
-  const [imagenFile, setImagenFile] = useState(null)
+  const [imagenFile, setImagenFile]     = useState(null)
   const inputRef = useRef()
 
-  useEffect(() => { cargar() }, [tiendaActual])
+  useEffect(() => { cargar() }, [])
 
   async function cargar() {
     setCargando(true)
     const { data } = await supabase.from('categorias').select('*').order('orden')
-    setCategorias((data || []).filter(c => (c.tienda || 'richard') === tiendaActual))
+    setCategorias((data || []).filter(c => c.tienda !== 'richard'))
     setCargando(false)
   }
 
@@ -72,7 +68,7 @@ export default function AdminCategorias() {
     try {
       let imagen_url = editando?.imagen_url || null
       if (imagenFile) imagen_url = await subirImagen(imagenFile, form.nombre)
-      const payload = { ...form, imagen_url, tienda: tiendaActual }
+      const payload = { ...form, imagen_url, tienda: 'miller' }
       if (editando) {
         const { error } = await supabase.from('categorias').update(payload).eq('id', editando.id)
         if (error) throw error
@@ -80,7 +76,7 @@ export default function AdminCategorias() {
       } else {
         const { error } = await supabase.from('categorias').insert(payload)
         if (error) throw error
-        toast.success('Categoría creada')
+        toast.success('Categoría creada 🚀')
       }
       setModalAbierto(false)
       cargar()
@@ -100,7 +96,7 @@ export default function AdminCategorias() {
 
   function handleExportar() {
     if (categorias.length === 0) return toast.error('No hay categorías para exportar')
-    exportarCSV(`categorias_${tiendaActual}`, [
+    exportarCSV('categorias_suscritech', [
       ['Nombre', 'Descripción', 'Orden', 'Activa'],
       ...categorias.map(c => [
         c.nombre, c.descripcion || '', c.orden, c.activo ? 'Sí' : 'No'
@@ -111,15 +107,15 @@ export default function AdminCategorias() {
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, flexWrap: 'wrap', gap: 10 }}>
         <h1 style={{ fontFamily: 'var(--fuente-display)', fontSize: 24, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 8 }}>
-          {esMiller ? <><Cpu size={24} color="#7c3aed" /> Categorías Digitales</> : <>Categorías<span style={{ color: 'var(--naranja)' }}>.</span></>}
+          <Cpu size={24} color="#7c3aed" /> Categorías Digitales<span style={{ color: '#06b6d4' }}>.</span>
         </h1>
         <div style={{ display: 'flex', gap: 8 }}>
           <button onClick={handleExportar} className="btn-ghost" style={{ fontSize: 13 }}>
             <Download size={14} /> Excel
           </button>
-          <button onClick={abrirNuevo} className="btn-primary" style={{ background: esMiller ? 'linear-gradient(135deg, #7c3aed, #06b6d4)' : 'var(--naranja)', border: 'none' }}>
+          <button onClick={abrirNuevo} className="btn-primary" style={{ background: 'linear-gradient(135deg, #7c3aed, #06b6d4)', border: 'none' }}>
             <Plus size={16} /> Nueva categoría
           </button>
         </div>
@@ -133,7 +129,7 @@ export default function AdminCategorias() {
                 {cat.imagen_url
                   ? <img src={cat.imagen_url} alt={cat.nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <Package size={32} color="var(--borde)" />
+                      <Package size={32} color="#06b6d4" />
                     </div>
                 }
               </div>
@@ -158,8 +154,8 @@ export default function AdminCategorias() {
       )}
 
       {modalAbierto && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-          <div className="card" style={{ width: '100%', maxWidth: 480, padding: '24px', maxHeight: '90vh', overflowY: 'auto' }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div className="card" style={{ width: '100%', maxWidth: 480, padding: '24px', maxHeight: '90vh', overflowY: 'auto', borderTop: '4px solid #7c3aed' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
               <h2 style={{ fontFamily: 'var(--fuente-display)', fontWeight: 700, fontSize: 18 }}>
                 {editando ? 'Editar categoría' : 'Nueva categoría'}
@@ -172,11 +168,11 @@ export default function AdminCategorias() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div>
                 <label style={{ fontSize: 13, fontWeight: 500, marginBottom: 6, display: 'block' }}>Nombre *</label>
-                <input value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} placeholder={esMiller ? "Ej: Diseño & Creatividad" : "Ej: Abarrotes"} />
+                <input value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} placeholder="Ej: Diseño & Creatividad" />
               </div>
               <div>
                 <label style={{ fontSize: 13, fontWeight: 500, marginBottom: 6, display: 'block' }}>Descripción</label>
-                <input value={form.descripcion} onChange={e => setForm({ ...form, descripcion: e.target.value })} placeholder={esMiller ? "Ej: Canva Pro, Adobe, etc." : "Ej: Arroz, azúcar, aceite..."} />
+                <input value={form.descripcion} onChange={e => setForm({ ...form, descripcion: e.target.value })} placeholder="Ej: Canva Pro, Adobe, CapCut..." />
               </div>
               <div>
                 <label style={{ fontSize: 13, fontWeight: 500, marginBottom: 6, display: 'block' }}>Orden</label>
@@ -214,7 +210,7 @@ export default function AdminCategorias() {
 
               <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
                 <button onClick={() => setModalAbierto(false)} className="btn-ghost" style={{ flex: 1, justifyContent: 'center' }}>Cancelar</button>
-                <button onClick={handleGuardar} className="btn-primary" disabled={subiendo} style={{ flex: 1, justifyContent: 'center', opacity: subiendo ? 0.7 : 1 }}>
+                <button onClick={handleGuardar} className="btn-primary" disabled={subiendo} style={{ flex: 1, justifyContent: 'center', opacity: subiendo ? 0.7 : 1, background: 'linear-gradient(135deg, #7c3aed, #06b6d4)', border: 'none' }}>
                   {subiendo ? 'Guardando...' : editando ? 'Guardar cambios' : 'Crear categoría'}
                 </button>
               </div>
