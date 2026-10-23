@@ -31,10 +31,10 @@ export default function Categoria() {
     setCargando(true)
     const [{ data: cat }, { data: prods }] = await Promise.all([
       supabase.from('categorias').select('*').eq('id', id).single(),
-      supabase.from('productos').select('*').eq('categoria_id', id).eq('activo', true).order('nombre'),
+      supabase.from('productos').select('*').eq('categoria_id', id).eq('activo', true).gt('stock', 0).order('nombre'),
     ])
     setCategoria(cat)
-    setProductos(prods || [])
+    setProductos((prods || []).filter(p => Number(p.stock) > 0))
     setCargando(false)
   }
 
@@ -71,11 +71,11 @@ export default function Categoria() {
         {cargando ? <div className="spinner" /> : productos.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '60px 0', color: '#94a3b8' }}>
             <Package size={48} style={{ margin: '0 auto 12px', opacity: 0.3 }} />
-            <p>No hay servicios disponibles en esta categoría aún</p>
+            <p>No hay servicios disponibles en esta categoría</p>
           </div>
         ) : (
           <>
-            <p style={{ fontSize: 13, color: '#94a3b8', marginBottom: 16 }}>{productos.length} servicios</p>
+            <p style={{ fontSize: 13, color: '#94a3b8', marginBottom: 16 }}>{productos.length} servicios disponibles</p>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 14 }}>
               {productosPaginados.map(p => <ProductoCard key={p.id} producto={p} />)}
             </div>
