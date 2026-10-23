@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../store'
-import { ShoppingBag, Calendar, Trash2, Download, Plus, X, Search, Package, FileText, Printer, BarChart3, List, Cpu, User, Mail, Phone, Globe } from 'lucide-react'
+import { ShoppingBag, Calendar, Trash2, Download, Plus, X, Search, Package, FileText, Printer, BarChart3, List, Cpu, User, Mail, Phone, Globe, Link2 } from 'lucide-react'
 import { exportarCSV } from '../../lib/exportar'
 import Paginador from '../../components/Paginador'
 import toast from 'react-hot-toast'
@@ -16,17 +16,21 @@ export default function AdminVentas() {
   const [modalVenta, setModalVenta]         = useState(false)
   const [productos, setProductos]           = useState([])
   const [cuentasMadre, setCuentasMadre]     = useState([])
+  const [usuariosDB, setUsuariosDB]         = useState([])
   const [busquedaVentas, setBusquedaVentas] = useState('')
   const [guardando, setGuardando]           = useState(false)
 
-  // Paginador (50 por defecto)
+  // Modal rápido para asociar una venta existente del historial a un cliente registrado
+  const [itemAsociar, setItemAsociar]       = useState(null)
+  const [usuarioAsociarId, setUsuarioAsociarId] = useState('')
+
   const [paginaActual, setPaginaActual]     = useState(1)
   const [itemsPorPagina, setItemsPorPagina] = useState(50)
 
-  // Estado para registro de suscripción digital en SuscriTech Global
   const [formDigital, setFormDigital] = useState({
     producto_id: '',
     compra_madre_id: '',
+    cliente_usuario_id: '',
     cliente_nombre: '',
     cliente_whatsapp: '',
     cliente_correo: '',
@@ -49,7 +53,6 @@ export default function AdminVentas() {
     cargar()
   }, [desde, hasta])
 
-  // Cálculo automático de Fecha de Vencimiento al cambiar Fecha de Compra o Meses
   useEffect(() => {
     if (formDigital.fecha_compra && formDigital.duracion_meses) {
       const f = new Date(formDigital.fecha_compra + 'T12:00:00')
@@ -60,15 +63,18 @@ export default function AdminVentas() {
 
   async function cargar() {
     setCargando(true)
-    const { data } = await supabase
-      .from('ventas')
-      .select('*, perfiles(nombre), venta_items(*, productos(nombre, imagen_url))')
-      .gte('created_at', desde + 'T00:00:00')
-      .lte('created_at', hasta + 'T23:59:59')
-      .order('created_at', { ascending: false })
+    const [{ data }, { data: perfs }] = await Promise.all([
+      supabase
+        .from('ventas')
+        .select('*, perfiles(nombre), venta_items(*, productos(nombre, imagen_url))')
+        .gte('created_at', desde + 'T00:00:00')
+        .lte('created_at', hasta + 'T23:59:59')
+        .order('created_at', { ascending: false }),
+      supabase.from('perfiles').select('id, nombre, email, telefono').order('nombre')
+    ])
 
-    const filtradas = (data || []).filter(v => v.tienda !== 'richard')
-    setVentas(filtradas)
+    setVentas((data || []).filter(v => v.tienda !== 'richard'))
+    setUsuariosDB(perfs || [])
     setCargando(false)
   }
 
@@ -76,7 +82,7 @@ export default function AdminVentas() {
     const [{ data }, { data: madres }] = await Promise.all([
       supabase
         .from('productos')
-        .select('id, nombre, precio, stock, unidad, imagen_url, tienda')
+        .select('id, nombre, precio, stock, unidad, planes, imagen_url, tienda')
         .eq('activo', true)
         .order('nombre'),
       supabase
@@ -93,8 +99,9 @@ export default function AdminVentas() {
     const hoy = new Date().toISOString().split('T')[0]
     const venc = new Date(); venc.setMonth(venc.getMonth() + 3)
     setFormDigital({
-      producto_id: '', compra_madre_id: '', cliente_nombre: '', cliente_whatsapp: '',
-      cliente_correo: '', plataforma_venta: 'WhatsApp', precio: '3.00', duracion_meses: 3,
+      producto_id: '', compra_madre_id: '', cliente_usuario_id: '',
+      cliente_nombre: '', cliente_whatsapp: '', cliente_correo: '',
+      plataforma_venta: 'WhatsApp', precio: '3.00', duracion_meses: 3,
       fecha_compra: hoy, fecha_vencimiento: venc.toISOString().split('T')[0]
     })
     cargarProductos()
@@ -105,14 +112,13 @@ export default function AdminVentas() {
     return texto ? texto.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase() : ""
   }
 
-  // GUARDAR VENTA DE SUSCRIPCIÓN EN SUSCRITECH GLOBAL
   async function guardarVentaDigital() {
     if (!formDigital.producto_id) return toast.error('Selecciona el servicio vendido')
     if (!formDigital.cliente_nombre.trim()) return toast.error('Ingresa el nombre del cliente')
     if (!formDigital.precio || Number(formDigital.precio) <= 0) return toast.error('Ingresa un precio válido')
 
     const prodSel = productos.find(p => p.id === formDigital.producto_id)
-    if (prodSel && prodSel.stock < 1) return toast.error('Sin cupos disponibles en stock para este servicio')
+    if (prodSel && prodSel.stock < 1) return toast.error('Sin stock disponible para este servicio')
 
     setGuardando(true)
     try {
@@ -140,6 +146,7 @@ export default function AdminVentas() {
         precio_unitario:    precioFinal,
         cantidad:           1,
         subtotal:           precioFinal,
+        cliente_usuario_id: formDigital.cliente_usuario_id || null,
         cliente_nombre:     formDigital.cliente_nombre.trim(),
         cliente_whatsapp:   formDigital.cliente_whatsapp.trim(),
         cliente_correo:     formDigital.cliente_correo.trim(),
@@ -158,7 +165,7 @@ export default function AdminVentas() {
         }
       }
 
-      toast.success('Suscripción registrada con fecha de vencimiento 🚀')
+      toast.success('Suscripción registrada con éxito 🚀')
       setModalVenta(false)
       cargar()
     } catch (e) {
@@ -167,15 +174,27 @@ export default function AdminVentas() {
     setGuardando(false)
   }
 
+  async function guardarAsociacionRapida() {
+    if (!itemAsociar) return
+    const { error } = await supabase
+      .from('venta_items')
+      .update({ cliente_usuario_id: usuarioAsociarId || null })
+      .eq('id', itemAsociar.id)
+    if (error) return toast.error('Error: ' + error.message)
+    toast.success(usuarioAsociarId ? 'Compra vinculada al usuario ✅' : 'Vínculo removido')
+    setItemAsociar(null)
+    cargar()
+  }
+
   async function eliminarVenta(itemId, esUltimo) {
     const msg = esUltimo
-      ? '¿Eliminar esta suscripción? Se eliminará el registro y se restaurará el cupo en stock.'
-      : '¿Eliminar este servicio de la venta? Se restaurará su cupo en stock.'
+      ? '¿Eliminar esta suscripción? Se eliminará el registro y se restaurará el stock.'
+      : '¿Eliminar este servicio de la venta? Se restaurará su stock.'
     if (!confirm(msg)) return
     try {
       const { error } = await supabase.rpc('revertir_item', { item_uuid: itemId })
       if (error) throw error
-      toast.success('Suscripción eliminada y cupo restaurado')
+      toast.success('Suscripción eliminada y stock restaurado')
       cargar()
     } catch (e) {
       toast.error('Error: ' + e.message)
@@ -202,7 +221,6 @@ export default function AdminVentas() {
            normalizarTexto(l.plataforma_venta).includes(t)
   })
 
-  // --- EXPORTACIONES (TXT, PDF y CSV) ---
   const exportarTXT = () => {
     if (lineasFiltradas.length === 0) return toast.error('No hay ventas para exportar')
     let contenido = `HISTORIAL DE SUSCRIPCIONES - SUSCRITECH GLOBAL\nDesde: ${desde} - Hasta: ${hasta}\n\n`
@@ -294,8 +312,6 @@ export default function AdminVentas() {
 
   const chartDiasData = Object.keys(ventasPorDia).map(k => ({ Fecha: k, Ingreso: parseFloat(ventasPorDia[k].toFixed(2)) })).sort((a, b) => a.Fecha.localeCompare(b.Fecha))
   const chartData = statsArray.sort((a, b) => b.ingreso - a.ingreso).slice(0, 10).map(p => ({ name: p.nombre.substring(0, 15) + '...', Ingreso: parseFloat(p.ingreso.toFixed(2)), Unidades: p.cantidad }))
-  const topVendidos = [...statsArray].sort((a, b) => b.cantidad - a.cantidad).slice(0, 5)
-  const menosVendidos = [...statsArray].sort((a, b) => a.cantidad - b.cantidad).slice(0, 5)
 
   const limiteValido = Math.max(1, Number(itemsPorPagina) || 50)
   const lineasPaginadas = lineasFiltradas.slice((paginaActual - 1) * limiteValido, paginaActual * limiteValido)
@@ -316,12 +332,10 @@ export default function AdminVentas() {
         </div>
       </div>
 
-      {/* -------------------- TAB HISTORIAL Y REGISTRO -------------------- */}
       {tabActual === 'historial' && (
         <>
           <div className="card" style={{ padding: '16px 20px', marginBottom: 20, borderTop: '3px solid #7c3aed' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: '1 1 200px', border: '1px solid var(--borde)', padding: '6px 12px', borderRadius: 8 }}>
                 <Search size={15} color="var(--texto-suave)" />
                 <input
@@ -333,7 +347,7 @@ export default function AdminVentas() {
                 />
               </div>
 
-              <Calendar size={16} color="var(--texto-suave)" style={{ marginLeft: 10 }} />
+              <Calendar size={16} color="var(--texto-suave)" />
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <label style={{ fontSize: 13, color: 'var(--texto-suave)' }}>Desde</label>
                 <input type="date" value={desde} onChange={e => setDesde(e.target.value)} style={{ width: 'auto', padding: '6px 10px' }} />
@@ -344,9 +358,9 @@ export default function AdminVentas() {
               </div>
 
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', borderLeft: '1px solid var(--borde)', paddingLeft: 12 }}>
-                 <button onClick={handleExportar} className="btn-ghost" title="Exportar CSV" style={{ fontSize: 11, padding: '6px 8px' }}><Download size={15}/></button>
-                 <button onClick={exportarTXT} className="btn-ghost" title="Exportar TXT Detallado" style={{ fontSize: 11, padding: '6px 8px' }}><FileText size={15}/></button>
-                 <button onClick={exportarPDF} className="btn-ghost" title="Exportar PDF Detallado" style={{ fontSize: 11, padding: '6px 8px', color: '#ef4444' }}><Printer size={15}/></button>
+                <button onClick={handleExportar} className="btn-ghost" title="Exportar CSV" style={{ fontSize: 11, padding: '6px 8px' }}><Download size={15}/></button>
+                <button onClick={exportarTXT} className="btn-ghost" title="Exportar TXT" style={{ fontSize: 11, padding: '6px 8px' }}><FileText size={15}/></button>
+                <button onClick={exportarPDF} className="btn-ghost" title="Exportar PDF" style={{ fontSize: 11, padding: '6px 8px', color: '#ef4444' }}><Printer size={15}/></button>
               </div>
 
               <div style={{ marginLeft: 'auto', textAlign: 'right', minWidth: '120px' }}>
@@ -372,54 +386,66 @@ export default function AdminVentas() {
           ) : (
             <>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {lineasPaginadas.map((l, idx) => (
-                  <div key={l.id || idx} className="card" style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12, borderLeft: '4px solid #7c3aed' }}>
+                {lineasPaginadas.map((l, idx) => {
+                  const usuarioVinculado = usuariosDB.find(u => u.id === l.cliente_usuario_id)
+                  return (
+                    <div key={l.id || idx} className="card" style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12, borderLeft: '4px solid #7c3aed', flexWrap: 'wrap' }}>
+                      {l.productos?.imagen_url
+                        ? <img src={l.productos.imagen_url} alt={l.nombre_producto} style={{ width: 42, height: 42, borderRadius: 8, objectFit: 'cover', flexShrink: 0 }} />
+                        : <div style={{ width: 42, height: 42, borderRadius: 8, background: 'var(--fondo)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <Package size={18} color="var(--borde)" />
+                          </div>
+                      }
 
-                    {l.productos?.imagen_url
-                      ? <img src={l.productos.imagen_url} alt={l.nombre_producto} style={{ width: 42, height: 42, borderRadius: 8, objectFit: 'cover', flexShrink: 0 }} />
-                      : <div style={{ width: 42, height: 42, borderRadius: 8, background: 'var(--fondo)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                          <Package size={18} color="var(--borde)" />
+                      <div style={{ flex: 1, minWidth: 200 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                          <p style={{ fontSize: 14, fontWeight: 600 }}>{l.nombre_producto}</p>
+                          {l.plataforma_venta && (
+                            <span style={{ fontSize: 10, fontWeight: 700, background: 'rgba(124, 58, 237, 0.2)', color: '#c4b5fd', padding: '2px 8px', borderRadius: 12 }}>
+                              {l.plataforma_venta}
+                            </span>
+                          )}
+                          {l.duracion_meses && (
+                            <span style={{ fontSize: 10, fontWeight: 700, background: 'rgba(6, 182, 212, 0.2)', color: '#38bdf8', padding: '2px 8px', borderRadius: 12 }}>
+                              {l.duracion_meses} meses
+                            </span>
+                          )}
+                          {usuarioVinculado && (
+                            <span style={{ fontSize: 10, fontWeight: 700, background: 'rgba(16, 185, 129, 0.2)', color: '#34d399', padding: '2px 8px', borderRadius: 12 }}>
+                              🔗 Usuario: {usuarioVinculado.nombre || usuarioVinculado.email}
+                            </span>
+                          )}
                         </div>
-                    }
 
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                        <p style={{ fontSize: 14, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {l.nombre_producto}
+                        <p style={{ fontSize: 11, color: 'var(--texto-suave)', marginTop: 3, lineHeight: 1.4 }}>
+                          👤 <b style={{ color: 'var(--texto)' }}>{l.cliente_nombre || 'Cliente'}</b> · 📱 {l.cliente_whatsapp || 'S/N'} · ✉️ {l.cliente_correo || 'S/C'}
+                          <br />
+                          📅 Compra: {new Date(l.fecha).toLocaleDateString('es-PE')} · ⏳ <b style={{ color: '#f87171' }}>Vence: {l.fecha_vencimiento || 'N/A'}</b>
                         </p>
-                        {l.plataforma_venta && (
-                          <span style={{ fontSize: 10, fontWeight: 700, background: 'rgba(124, 58, 237, 0.2)', color: '#c4b5fd', padding: '2px 8px', borderRadius: 12 }}>
-                            {l.plataforma_venta}
-                          </span>
-                        )}
-                        {l.duracion_meses && (
-                          <span style={{ fontSize: 10, fontWeight: 700, background: 'rgba(6, 182, 212, 0.2)', color: '#38bdf8', padding: '2px 8px', borderRadius: 12 }}>
-                            {l.duracion_meses} meses
-                          </span>
-                        )}
                       </div>
 
-                      <p style={{ fontSize: 11, color: 'var(--texto-suave)', marginTop: 3, lineHeight: 1.4 }}>
-                        👤 <b style={{ color: 'var(--texto)' }}>{l.cliente_nombre || 'Cliente'}</b> · 📱 {l.cliente_whatsapp || 'S/N'} · ✉️ {l.cliente_correo || 'S/C'}
-                        <br />
-                        📅 Compra: {new Date(l.fecha).toLocaleDateString('es-PE')} · ⏳ <b style={{ color: '#f87171' }}>Vence: {l.fecha_vencimiento || 'N/A'}</b>
-                      </p>
+                      <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                        <p style={{ fontFamily: 'var(--fuente-display)', fontWeight: 700, fontSize: 15, color: '#06b6d4' }}>
+                          S/ {Number(l.subtotal).toFixed(2)}
+                        </p>
+                      </div>
+
+                      <button
+                        onClick={() => { setItemAsociar(l); setUsuarioAsociarId(l.cliente_usuario_id || '') }}
+                        className="btn-ghost"
+                        title="Asociar esta compra a un usuario registrado"
+                        style={{ padding: '6px 10px', fontSize: 11, color: '#06b6d4' }}>
+                        <Link2 size={14} /> Asociar
+                      </button>
+
+                      <button
+                        onClick={() => eliminarVenta(l.id, l.items_count === 1)}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, flexShrink: 0, color: '#ef4444' }}>
+                        <Trash2 size={15} />
+                      </button>
                     </div>
-
-                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                      <p style={{ fontFamily: 'var(--fuente-display)', fontWeight: 700, fontSize: 15, color: '#06b6d4' }}>
-                        S/ {Number(l.subtotal).toFixed(2)}
-                      </p>
-                    </div>
-
-                    <button
-                      onClick={() => eliminarVenta(l.id, l.items_count === 1)}
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, flexShrink: 0, color: '#ef4444' }}>
-                      <Trash2 size={15} />
-                    </button>
-
-                  </div>
-                ))}
+                  )
+                })}
               </div>
 
               <Paginador
@@ -435,21 +461,9 @@ export default function AdminVentas() {
         </>
       )}
 
-      {/* -------------------- TAB ANÁLISIS -------------------- */}
+      {/* TAB ANÁLISIS */}
       {tabActual === 'analisis' && (
         <div className="analisis-container">
-          <div className="card" style={{ padding: '16px 20px', marginBottom: 20, display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
-            <Calendar size={16} color="var(--texto-suave)" />
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <label style={{ fontSize: 13, color: 'var(--texto-suave)' }}>Desde</label>
-              <input type="date" value={desde} onChange={e => setDesde(e.target.value)} style={{ width: 'auto', padding: '6px 10px', fontSize: 12 }} />
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <label style={{ fontSize: 13, color: 'var(--texto-suave)' }}>Hasta</label>
-              <input type="date" value={hasta} onChange={e => setHasta(e.target.value)} style={{ width: 'auto', padding: '6px 10px', fontSize: 12 }} />
-            </div>
-          </div>
-
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 24 }}>
             <div className="card" style={{ padding: 20, borderTop: '3px solid #10b981' }}>
               <p style={{ fontSize: 12, color: 'var(--texto-suave)', fontWeight: 600 }}>Total Ingresos</p>
@@ -459,70 +473,74 @@ export default function AdminVentas() {
               <p style={{ fontSize: 12, color: 'var(--texto-suave)', fontWeight: 600 }}>Suscripciones Vendidas</p>
               <h3 style={{ fontSize: 26, fontWeight: 800, marginTop: 4 }}>{productosVendidosStats}</h3>
             </div>
-            <div className="card" style={{ padding: 20, borderTop: `3px solid ${colorTema}` }}>
-              <p style={{ fontSize: 12, color: 'var(--texto-suave)', fontWeight: 600 }}>Servicios Activos</p>
-              <h3 style={{ fontSize: 26, fontWeight: 800, marginTop: 4, color: colorTema }}>{statsArray.length}</h3>
-            </div>
             <div className="card" style={{ padding: 20 }}>
               <p style={{ fontSize: 12, color: 'var(--texto-suave)', fontWeight: 600 }}>Promedio Venta Diaria</p>
               <h3 style={{ fontSize: 20, fontWeight: 800, marginTop: 4 }}>S/ {promedioVentaDiaria.toFixed(2)}</h3>
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 20, marginBottom: 24 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 20 }}>
             <div className="card" style={{ padding: 20 }}>
               <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 16 }}>Ingresos por Día (S/)</h3>
-              <div style={{ height: 300 }}>
+              <div style={{ height: 280 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={chartDiasData}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--borde)" />
-                    <XAxis dataKey="Fecha" fontSize={11} tickMargin={10} stroke="var(--texto-suave)" />
+                    <XAxis dataKey="Fecha" fontSize={11} stroke="var(--texto-suave)" />
                     <YAxis fontSize={11} stroke="var(--texto-suave)" />
-                    <Tooltip cursor={{ fill: 'rgba(148,163,184,0.1)' }} contentStyle={{ borderRadius: 8, border: '1px solid var(--borde)', background: 'var(--blanco)', color: 'var(--texto)' }} />
+                    <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid var(--borde)', background: 'var(--blanco)', color: 'var(--texto)' }} />
                     <Bar dataKey="Ingreso" fill="#10b981" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
             </div>
-
             <div className="card" style={{ padding: 20 }}>
-              <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 16 }}>Top 10 Servicios (Mayores Ingresos)</h3>
-              <div style={{ height: 300 }}>
+              <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 16 }}>Top Servicios</h3>
+              <div style={{ height: 280 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={chartData} layout="vertical">
                     <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--borde)" />
                     <XAxis type="number" fontSize={11} stroke="var(--texto-suave)" />
                     <YAxis dataKey="name" type="category" width={120} fontSize={10} stroke="var(--texto-suave)" />
-                    <Tooltip cursor={{ fill: 'rgba(148,163,184,0.1)' }} contentStyle={{ borderRadius: 8, border: '1px solid var(--borde)', background: 'var(--blanco)', color: 'var(--texto)' }} />
+                    <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid var(--borde)', background: 'var(--blanco)', color: 'var(--texto)' }} />
                     <Bar dataKey="Ingreso" fill="#7c3aed" radius={[0, 4, 4, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
             </div>
           </div>
+        </div>
+      )}
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20, marginBottom: 24 }}>
-            <div className="card" style={{ padding: 20 }}>
-              <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12, color: '#06b6d4' }}>🔥 Más Vendidos (Suscripciones)</h3>
-              {topVendidos.map((p, i) => (
-                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--borde)' }}>
-                  <span style={{ fontSize: 13, fontWeight: 500 }}>{p.nombre}</span><span style={{ fontSize: 13, fontWeight: 700 }}>{p.cantidad} unid.</span>
-                </div>
+      {/* MODAL PARA ASOCIAR UNA VENTA EXISTENTE A UN USUARIO REGISTRADO */}
+      {itemAsociar && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 250, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div className="card" style={{ width: '100%', maxWidth: 440, padding: 24, borderTop: '4px solid #06b6d4' }}>
+            <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 8 }}>
+              🔗 Asociar Compra a un Cliente Registrado
+            </h3>
+            <p style={{ fontSize: 12, color: 'var(--texto-suave)', marginBottom: 14 }}>
+              Servicio: <b>{itemAsociar.nombre_producto}</b> ({itemAsociar.cliente_correo || itemAsociar.cliente_nombre})
+            </p>
+            <select value={usuarioAsociarId} onChange={e => setUsuarioAsociarId(e.target.value)} style={{ width: '100%', marginBottom: 16, fontSize: 13 }}>
+              <option value="">-- Sin usuario vinculado --</option>
+              {usuariosDB.map(u => (
+                <option key={u.id} value={u.id}>
+                  {u.nombre || 'Usuario'} ({u.email})
+                </option>
               ))}
-            </div>
-            <div className="card" style={{ padding: 20 }}>
-              <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>🧊 Menos Vendidos</h3>
-              {menosVendidos.map((p, i) => (
-                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--borde)' }}>
-                  <span style={{ fontSize: 13, fontWeight: 500 }}>{p.nombre}</span><span style={{ fontSize: 13, fontWeight: 700, color: 'var(--texto-suave)' }}>{p.cantidad} unid.</span>
-                </div>
-              ))}
+            </select>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button onClick={() => setItemAsociar(null)} className="btn-ghost" style={{ flex: 1, justifyContent: 'center' }}>Cancelar</button>
+              <button onClick={guardarAsociacionRapida} className="btn-primary" style={{ flex: 1, justifyContent: 'center', background: 'linear-gradient(135deg, #7c3aed, #06b6d4)', border: 'none' }}>
+                Guardar Vínculo
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* -------------------- MODAL SUSCRITECH GLOBAL (VENTA DE SUSCRIPCIONES) -------------------- */}
+      {/* MODAL REGISTRAR NUEVA SUSCRIPCIÓN DIGITAL */}
       {modalVenta && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(2, 6, 23, 0.78)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
           <div className="card" style={{ width: '100%', maxWidth: 540, maxHeight: '92vh', overflowY: 'auto', padding: 24, borderTop: '4px solid #7c3aed' }}>
@@ -535,7 +553,7 @@ export default function AdminVentas() {
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div>
-                <label style={{ fontSize: 12, fontWeight: 700, display: 'block', marginBottom: 4, color: 'var(--texto)' }}>1. Servicio contratado *</label>
+                <label style={{ fontSize: 12, fontWeight: 700, display: 'block', marginBottom: 4 }}>1. Servicio contratado *</label>
                 <select
                   value={formDigital.producto_id}
                   onChange={e => {
@@ -545,7 +563,32 @@ export default function AdminVentas() {
                   style={{ width: '100%', fontSize: 13 }}>
                   <option value="">-- Selecciona Servicio (Canva, Google, HBO...) --</option>
                   {productos.map(p => (
-                    <option key={p.id} value={p.id}>{p.nombre} (Stock / Cupos: {p.stock})</option>
+                    <option key={p.id} value={p.id}>{p.nombre} (Stock: {p.stock})</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Vincular opcionalmente a un usuario registrado */}
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 700, display: 'block', marginBottom: 4, color: '#06b6d4' }}>
+                  🔗 Asociar a Usuario Registrado en la Web (Opcional)
+                </label>
+                <select
+                  value={formDigital.cliente_usuario_id}
+                  onChange={e => {
+                    const u = usuariosDB.find(x => x.id === e.target.value)
+                    setFormDigital({
+                      ...formDigital,
+                      cliente_usuario_id: e.target.value,
+                      cliente_nombre: u && !formDigital.cliente_nombre ? (u.nombre || '') : formDigital.cliente_nombre,
+                      cliente_whatsapp: u && !formDigital.cliente_whatsapp ? (u.telefono || '') : formDigital.cliente_whatsapp,
+                      cliente_correo: u && !formDigital.cliente_correo ? (u.email || '') : formDigital.cliente_correo
+                    })
+                  }}
+                  style={{ width: '100%', fontSize: 12 }}>
+                  <option value="">-- Cliente sin usuario web / No vincular --</option>
+                  {usuariosDB.map(u => (
+                    <option key={u.id} value={u.id}>{u.nombre || 'Usuario'} ({u.email})</option>
                   ))}
                 </select>
               </div>
@@ -553,7 +596,7 @@ export default function AdminVentas() {
               {cuentasMadre.length > 0 && (
                 <div>
                   <label style={{ fontSize: 11, fontWeight: 600, display: 'block', marginBottom: 4, color: 'var(--texto-suave)' }}>
-                    Cuenta Madre / Equipo de origen (de Compras)
+                    Cuenta Madre / Equipo de origen (Opcional)
                   </label>
                   <select value={formDigital.compra_madre_id} onChange={e => setFormDigital({ ...formDigital, compra_madre_id: e.target.value })} style={{ width: '100%', fontSize: 12 }}>
                     <option value="">-- Automático / Sin cuenta específica --</option>
@@ -568,23 +611,23 @@ export default function AdminVentas() {
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 <div>
-                  <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--texto)', display: 'block', marginBottom: 4 }}><User size={12}/> Nombre del Cliente *</label>
+                  <label style={{ fontSize: 11, fontWeight: 600, display: 'block', marginBottom: 4 }}><User size={12}/> Nombre del Cliente *</label>
                   <input type="text" placeholder="Ej: Juan Pérez" value={formDigital.cliente_nombre} onChange={e => setFormDigital({ ...formDigital, cliente_nombre: e.target.value })} style={{ fontSize: 13 }} />
                 </div>
                 <div>
-                  <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--texto)', display: 'block', marginBottom: 4 }}><Phone size={12}/> WhatsApp del Cliente *</label>
+                  <label style={{ fontSize: 11, fontWeight: 600, display: 'block', marginBottom: 4 }}><Phone size={12}/> WhatsApp del Cliente</label>
                   <input type="text" placeholder="Ej: 924545856" value={formDigital.cliente_whatsapp} onChange={e => setFormDigital({ ...formDigital, cliente_whatsapp: e.target.value })} style={{ fontSize: 13 }} />
                 </div>
               </div>
 
               <div>
-                <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--texto)', display: 'block', marginBottom: 4 }}><Mail size={12}/> Correo del Cliente (donde se activó el servicio) *</label>
+                <label style={{ fontSize: 11, fontWeight: 600, display: 'block', marginBottom: 4 }}><Mail size={12}/> Correo de la Cuenta Activada (Opcional)</label>
                 <input type="email" placeholder="cliente@gmail.com" value={formDigital.cliente_correo} onChange={e => setFormDigital({ ...formDigital, cliente_correo: e.target.value })} style={{ fontSize: 13 }} />
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 <div>
-                  <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--texto)', display: 'block', marginBottom: 4 }}><Globe size={12}/> Plataforma de Venta</label>
+                  <label style={{ fontSize: 11, fontWeight: 600, display: 'block', marginBottom: 4 }}><Globe size={12}/> Plataforma de Venta</label>
                   <select value={formDigital.plataforma_venta} onChange={e => setFormDigital({ ...formDigital, plataforma_venta: e.target.value })} style={{ fontSize: 13 }}>
                     <option value="WhatsApp">WhatsApp</option>
                     <option value="Marketplace">Facebook Marketplace</option>
@@ -594,14 +637,13 @@ export default function AdminVentas() {
                   </select>
                 </div>
                 <div>
-                  <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--texto)', display: 'block', marginBottom: 4 }}>Precio Cobrado (S/) *</label>
+                  <label style={{ fontSize: 11, fontWeight: 600, display: 'block', marginBottom: 4 }}>Precio Cobrado (S/) *</label>
                   <input type="number" step="0.1" value={formDigital.precio} onChange={e => setFormDigital({ ...formDigital, precio: e.target.value })} style={{ fontSize: 14, fontWeight: 800, color: '#38bdf8' }} />
                 </div>
               </div>
 
-              {/* Recuadro de Planes Rápidos */}
               <div style={{ background: 'var(--fondo)', padding: 14, borderRadius: 10, border: '1px solid var(--borde)' }}>
-                <label style={{ fontSize: 11, fontWeight: 700, display: 'block', marginBottom: 8, color: 'var(--texto)' }}>
+                <label style={{ fontSize: 11, fontWeight: 700, display: 'block', marginBottom: 8 }}>
                   ⚡ Planes Rápidos (Calcula el vencimiento automático):
                 </label>
                 <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
@@ -617,7 +659,7 @@ export default function AdminVentas() {
                         key={plan.m} type="button"
                         onClick={() => setFormDigital({ ...formDigital, duracion_meses: plan.m, precio: plan.p })}
                         style={{
-                          padding: '7px 12px', fontSize: 11, fontWeight: 700, borderRadius: 8, cursor: 'pointer', transition: '0.15s',
+                          padding: '7px 12px', fontSize: 11, fontWeight: 700, borderRadius: 8, cursor: 'pointer',
                           border: seleccionado ? '2px solid #06b6d4' : '1px solid var(--borde)',
                           background: seleccionado ? 'linear-gradient(135deg, rgba(124, 58, 237, 0.35), rgba(6, 182, 212, 0.25))' : 'var(--blanco)',
                           color: seleccionado ? '#38bdf8' : 'var(--texto)'
