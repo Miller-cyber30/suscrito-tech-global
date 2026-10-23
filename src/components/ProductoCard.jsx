@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { ShoppingCart, Plus, Package, X, ShieldCheck } from 'lucide-react'
 import { useCarrito } from '../store'
 import toast from 'react-hot-toast'
@@ -7,35 +7,60 @@ export default function ProductoCard({ producto }) {
   const agregar = useCarrito(s => s.agregar)
   const [modalAbierto, setModalAbierto] = useState(false)
 
-  // Ocultar de la tienda si el stock llega a 0
-  if (producto.stock < 1) return null
+  // Si el stock llega a 0, desaparece automáticamente de la vista pública
+  if (Number(producto.stock) <= 0 || !producto.activo) return null
 
-  // Planes múltiples simulados o configurables (ej. Canva Pro: 3m S/3, 6m S/5, 12m S/8)
-  const planesDisponibles = [
-    { meses: 3, precio: Number(producto.precio) || 3.00, label: '3 Meses' },
-    { meses: 6, precio: (Number(producto.precio) || 3.00) + 2.00, label: '6 Meses' },
-    { meses: 12, precio: (Number(producto.precio) || 3.00) + 5.00, label: '12 Meses' }
-  ]
-
-  const [planSeleccionado, setPlanSeleccionado] = useState(planesDisponibles[0])
-
-  function handleAgregar(e) {
-    e.stopPropagation()
-    const itemAAgregar = {
-      ...producto,
-      precio: planSeleccionado.precio,
-      unidad: `${planSeleccionado.meses} meses`,
-      idUnicoPlan: `${producto.id}_${planSeleccionado.meses}`
+  // Obtiene los planes configurados en el producto ordenados del precio más bajo al más alto
+  const planes = useMemo(() => {
+    if (Array.isArray(producto.planes) && producto.planes.length > 0) {
+      return [...producto.planes]
+        .map(pl => ({
+          duracion: pl.duracion || pl.label || producto.unidad || 'Plan Pro',
+          precio: Number(pl.precio || producto.precio || 0)
+        }))
+        .sort((a, b) => a.precio - b.precio)
     }
-    agregar(itemAAgregar)
-    toast.success(`${producto.nombre} (${planSeleccionado.label}) agregado`, { icon: '🚀' })
+    return [{
+      duracion: producto.unidad || 'Plan Pro',
+      precio: Number(producto.precio_oferta || producto.precio || 0)
+    }]
+  }, [producto])
+
+  const [planSeleccionado, setPlanSeleccionado] = useState(planes[0])
+  const tieneVariosPlanes = planes.length > 1
+  const precioMasBajo = planes[0]?.precio || Number(producto.precio || 0)
+
+  function handleAgregarPlan(plan = planSeleccionado, cerrarModal = false) {
+    const itemCarrito = {
+      ...producto,
+      nombre: tieneVariosPlanes ? `${producto.nombre} (${plan.duracion})` : producto.nombre,
+      precio: Number(plan.precio),
+      unidad: plan.duracion,
+      pide_correo: producto.pide_correo !== false,
+      cartKey: `${producto.id}_${plan.duracion}`
+    }
+    agregar(itemCarrito)
+    toast.success(`${itemCarrito.nombre} agregado al carrito`, { icon: '🚀' })
+    if (cerrarModal) setModalAbierto(false)
+  }
+
+  function handleBotonMasTarjeta(e) {
+    e.stopPropagation()
+    // Si tiene varios planes, abre el modal para que el cliente elija qué plan desea; si tiene 1 solo, lo agrega directo
+    if (tieneVariosPlanes) {
+      setModalAbierto(true)
+    } else {
+      handleAgregarPlan(planes[0], false)
+    }
   }
 
   const colorAcento = '#06b6d4'
 
   return (
     <>
-      <div className="card"
+      {/* Tarjeta en Catálogo */}
+      <div
+        className="card"
         onClick={() => setModalAbierto(true)}
         style={{
           display: 'flex', flexDirection: 'column', overflow: 'hidden',
@@ -43,6 +68,16 @@ export default function ProductoCard({ producto }) {
           background: 'rgba(30, 41, 59, 0.85)',
           border: '1px solid rgba(124, 58, 237, 0.35)',
           color: '#f8fafc'
+        }}
+        onMouseEnter={e => {
+          e.currentTarget.style.transform = 'translateY(-3px)'
+          e.currentTarget.style.boxShadow = '0 10px 25px rgba(124, 58, 237, 0.3)'
+          e.currentTarget.style.borderColor = '#06b6d4'
+        }}
+        onMouseLeave={e => {
+          e.currentTarget.style.transform = 'translateY(0)'
+          e.currentTarget.style.boxShadow = 'var(--sombra)'
+          e.currentTarget.style.borderColor = 'rgba(124, 58, 237, 0.35)'
         }}>
 
         <div style={{ aspectRatio: '1', background: '#0f172a', position: 'relative', overflow: 'hidden' }}>
@@ -53,88 +88,152 @@ export default function ProductoCard({ producto }) {
               <Package size={48} />
             </div>
           )}
+          {tieneVariosPlanes && (
+            <span style={{
+              position: 'absolute', top: 8, left: 8, fontSize: 10, fontWeight: 700,
+              padding: '3px 9px', borderRadius: 20,
+              background: 'rgba(15, 23, 42, 0.85)', color: '#38bdf8',
+              border: '1px solid rgba(6, 182, 212, 0.4)'
+            }}>
+              {planes.length} planes disponibles
+            </span>
+          )}
         </div>
 
-        <div style={{ padding: '12px 14px', flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <p style={{ fontSize: 13, fontWeight: 600, color: '#f8fafc', lineHeight: 1.3, flex: 1 }}>
+        <div style={{ padding: '12px 14px', flex: 1, display: 'flex', flexDirection: 'column', gap: 5 }}>
+          <p style={{ fontSize: 14, fontWeight: 700, color: '#f8fafc', lineHeight: 1.3, flex: 1 }}>
             {producto.nombre}
           </p>
 
-          {/* Selector rápido de planes en la tarjeta */}
-          <div style={{ display: 'flex', gap: 4 }} onClick={e => e.stopPropagation()}>
-            {planesDisponibles.map(plan => (
-              <button key={plan.meses} type="button"
-                onClick={() => setPlanSeleccionado(plan)}
-                style={{
-                  flex: 1, padding: '4px 2px', fontSize: 10, fontWeight: 700, borderRadius: 6, cursor: 'pointer',
-                  border: planSeleccionado.meses === plan.meses ? '1px solid #06b6d4' : '1px solid var(--borde)',
-                  background: planSeleccionado.meses === plan.meses ? 'rgba(6, 182, 212, 0.25)' : 'transparent',
-                  color: planSeleccionado.meses === plan.meses ? '#38bdf8' : '#94a3b8'
-                }}>
-                {plan.meses}m
-              </button>
-            ))}
-          </div>
+          <p style={{ fontSize: 11, color: '#94a3b8' }}>
+            ⚡ {planes[0]?.duracion} {tieneVariosPlanes ? 'y más planes' : ''}
+          </p>
 
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 }}>
-            <span style={{ fontFamily: 'var(--fuente-display)', fontWeight: 700, fontSize: 17, color: colorAcento }}>
-              S/ {planSeleccionado.precio.toFixed(2)}
-            </span>
-            <button onClick={handleAgregar}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
+            <div>
+              {tieneVariosPlanes && (
+                <span style={{ fontSize: 10, color: '#94a3b8', display: 'block', lineHeight: 1 }}>Desde</span>
+              )}
+              <span style={{ fontFamily: 'var(--fuente-display)', fontWeight: 800, fontSize: 18, color: colorAcento }}>
+                S/ {precioMasBajo.toFixed(2)}
+              </span>
+            </div>
+
+            <button
+              onClick={handleBotonMasTarjeta}
+              title={tieneVariosPlanes ? 'Elegir plan' : 'Agregar al carrito'}
               style={{
-                width: 34, height: 34, borderRadius: 8,
+                width: 36, height: 36, borderRadius: 10,
                 background: 'linear-gradient(135deg, #7c3aed, #06b6d4)',
                 color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                border: 'none', cursor: 'pointer'
+                transition: 'transform 0.15s', flexShrink: 0, border: 'none', cursor: 'pointer'
               }}>
-              <Plus size={18} />
+              <Plus size={19} />
             </button>
           </div>
         </div>
       </div>
 
-      {/* Modal Detalle y Selección de Planes */}
+      {/* Modal para elegir plan y ver detalles */}
       {modalAbierto && (
-        <div onClick={() => setModalAbierto(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-          <div onClick={e => e.stopPropagation()} className="card" style={{ width: '100%', maxWidth: 480, maxHeight: '90vh', overflowY: 'auto', borderRadius: 20, background: '#0f172a', color: '#f8fafc', border: '1px solid rgba(6, 182, 212, 0.4)' }}>
-            
+        <div
+          onClick={() => setModalAbierto(false)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div
+            onClick={e => e.stopPropagation()}
+            className="card"
+            style={{
+              width: '100%', maxWidth: 460, maxHeight: '90vh', overflowY: 'auto', borderRadius: 20,
+              background: '#0f172a',
+              color: '#f8fafc',
+              border: '1px solid rgba(6, 182, 212, 0.4)'
+            }}>
+
+            {/* Imagen grande */}
             <div style={{ position: 'relative', background: '#020617', borderRadius: '20px 20px 0 0', overflow: 'hidden', aspectRatio: '4/3' }}>
               {producto.imagen_url ? (
                 <img src={producto.imagen_url} alt={producto.nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               ) : (
-                <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Package size={80} color="var(--borde)" /></div>
+                <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Package size={80} color="var(--borde)" />
+                </div>
               )}
-              <button onClick={() => setModalAbierto(false)} style={{ position: 'absolute', top: 12, right: 12, width: 36, height: 36, borderRadius: '50%', background: 'rgba(0,0,0,0.55)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' }}><X size={18} /></button>
+              <button onClick={() => setModalAbierto(false)}
+                style={{ position: 'absolute', top: 12, right: 12, width: 36, height: 36, borderRadius: '50%', background: 'rgba(0,0,0,0.6)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' }}>
+                <X size={18} />
+              </button>
             </div>
 
+            {/* Info y selector de plan */}
             <div style={{ padding: '20px 22px' }}>
-              <h2 style={{ fontFamily: 'var(--fuente-display)', fontSize: 22, fontWeight: 800, marginBottom: 6 }}>{producto.nombre}</h2>
-              <p style={{ fontSize: 14, color: '#cbd5e1', marginBottom: 16 }}>{producto.descripcion || 'Entrega inmediata en tu cuenta o correo personal.'}</p>
+              <h2 style={{ fontFamily: 'var(--fuente-display)', fontSize: 22, fontWeight: 800, marginBottom: 6, lineHeight: 1.2 }}>
+                {producto.nombre}
+              </h2>
 
-              <label style={{ fontSize: 12, fontWeight: 700, color: '#06b6d4', display: 'block', marginBottom: 8 }}>Selecciona tu plan:</label>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 20 }}>
-                {planesDisponibles.map(plan => (
-                  <button key={plan.meses} type="button" onClick={() => setPlanSeleccionado(plan)}
-                    style={{
-                      padding: '10px 8px', borderRadius: 10, cursor: 'pointer', textAlign: 'center',
-                      border: planSeleccionado.meses === plan.meses ? '2px solid #06b6d4' : '1px solid var(--borde)',
-                      background: planSeleccionado.meses === plan.meses ? 'rgba(6, 182, 212, 0.2)' : '#1e293b',
-                      color: '#fff'
-                    }}>
-                    <p style={{ fontSize: 12, fontWeight: 700 }}>{plan.label}</p>
-                    <p style={{ fontSize: 14, fontWeight: 800, color: '#38bdf8', marginTop: 2 }}>S/ {plan.precio.toFixed(2)}</p>
-                  </button>
-                ))}
+              {producto.descripcion && (
+                <p style={{ fontSize: 13, color: '#cbd5e1', marginBottom: 14, lineHeight: 1.5 }}>
+                  {producto.descripcion}
+                </p>
+              )}
+
+              {/* Selector de Planes */}
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ fontSize: 12, fontWeight: 700, color: '#06b6d4', display: 'block', marginBottom: 8 }}>
+                  {tieneVariosPlanes ? '⚡ Elige el plan que deseas adquirir:' : '⚡ Plan disponible:'}
+                </label>
+                <div style={{ display: 'grid', gridTemplateColumns: planes.length > 2 ? 'repeat(3, 1fr)' : 'repeat(auto-fit, minmax(120px, 1fr))', gap: 8 }}>
+                  {planes.map((pl, idx) => {
+                    const activo = planSeleccionado.duracion === pl.duracion && planSeleccionado.precio === pl.precio
+                    return (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => setPlanSeleccionado(pl)}
+                        style={{
+                          padding: '10px 8px',
+                          borderRadius: 12,
+                          cursor: 'pointer',
+                          textAlign: 'center',
+                          transition: '0.15s',
+                          border: activo ? '2px solid #06b6d4' : '1px solid #334155',
+                          background: activo ? 'linear-gradient(135deg, rgba(124, 58, 237, 0.3), rgba(6, 182, 212, 0.2))' : '#1e293b',
+                          color: '#fff'
+                        }}>
+                        <p style={{ fontSize: 12, fontWeight: 700, color: activo ? '#fff' : '#cbd5e1' }}>{pl.duracion}</p>
+                        <p style={{ fontSize: 16, fontWeight: 800, color: '#38bdf8', marginTop: 2 }}>
+                          S/ {Number(pl.precio).toFixed(2)}
+                        </p>
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-                <span style={{ fontFamily: 'var(--fuente-display)', fontSize: 28, fontWeight: 800, color: colorAcento }}>
-                  S/ {planSeleccionado.precio.toFixed(2)}
-                </span>
+              <div style={{ padding: '10px 12px', borderRadius: 10, background: 'rgba(16, 185, 129, 0.12)', border: '1px solid rgba(16, 185, 129, 0.35)', fontSize: 12, color: '#a7f3d0', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <ShieldCheck size={18} color="#10b981" style={{ flexShrink: 0 }} />
+                <span>¡Adquiere primero y luego realiza el pago! Entrega inmediata y 100% segura.</span>
               </div>
 
-              <button onClick={handleAgregar} className="btn-primary" style={{ width: '100%', justifyContent: 'center', padding: '14px', fontSize: 16, borderRadius: 12, gap: 10, background: 'linear-gradient(135deg, #7c3aed, #06b6d4)', border: 'none' }}>
-                <ShoppingCart size={20} /> Agregar plan al carrito
+              {/* Precio del plan elegido */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+                <div>
+                  <span style={{ fontSize: 11, color: '#94a3b8', display: 'block' }}>Plan seleccionado: {planSeleccionado.duracion}</span>
+                  <span style={{ fontFamily: 'var(--fuente-display)', fontSize: 30, fontWeight: 800, color: colorAcento }}>
+                    S/ {Number(planSeleccionado.precio).toFixed(2)}
+                  </span>
+                </div>
+              </div>
+
+              <button
+                onClick={() => handleAgregarPlan(planSeleccionado, true)}
+                className="btn-primary"
+                style={{
+                  width: '100%', justifyContent: 'center', padding: '14px', fontSize: 15, borderRadius: 12, gap: 10,
+                  background: 'linear-gradient(135deg, #7c3aed, #06b6d4)',
+                  border: 'none'
+                }}>
+                <ShoppingCart size={19} />
+                Agregar al carrito · S/ {Number(planSeleccionado.precio).toFixed(2)}
               </button>
             </div>
           </div>
