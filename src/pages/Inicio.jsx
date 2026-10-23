@@ -14,7 +14,6 @@ export default function Inicio() {
   const [mostrarSugerencias, setMostrarSugerencias] = useState(false)
   const [cargando, setCargando] = useState(true)
 
-  // Estados del Paginador (50 por defecto)
   const [paginaActual, setPaginaActual] = useState(1)
   const [itemsPorPagina, setItemsPorPagina] = useState(50)
 
@@ -36,11 +35,10 @@ export default function Inicio() {
     setCargando(true)
     const [{ data: cats }, { data: prods }] = await Promise.all([
       supabase.from('categorias').select('*').eq('activo', true).order('orden'),
-      supabase.from('productos').select('*').eq('activo', true).order('nombre'),
+      supabase.from('productos').select('*').eq('activo', true).gt('stock', 0).order('nombre'),
     ])
-    // En la base de datos dedicada a SuscriTech Global, muestra todos salvo que alguno sea 'richard'
     setCategorias((cats || []).filter(c => c.tienda !== 'richard'))
-    setProductos((prods || []).filter(p => p.tienda !== 'richard'))
+    setProductos((prods || []).filter(p => p.tienda !== 'richard' && Number(p.stock) > 0))
     setCargando(false)
   }
 
@@ -89,7 +87,7 @@ export default function Inicio() {
               }
               <div>
                 <p style={{ fontSize: 13, fontWeight: 600 }}>{p.nombre}</p>
-                <p style={{ fontSize: 12, color: '#06b6d4', fontWeight: 700 }}>S/ {Number(p.precio).toFixed(2)}</p>
+                <p style={{ fontSize: 12, color: '#06b6d4', fontWeight: 700 }}>Desde S/ {Number(p.precio).toFixed(2)}</p>
               </div>
             </button>
           ))}
@@ -117,7 +115,7 @@ export default function Inicio() {
                 <span style={{ color: '#a5f3fc' }}>Cuentas & Suscripciones Pro</span>
               </h1>
               <p style={{ fontSize: 14, opacity: 0.92, maxWidth: 560, marginBottom: 18 }}>
-                Activa Canva Pro, Google, HBO y más directamente en tu correo personal. 100% seguro, entrega inmediata y soporte garantizado.
+                Activa Canva Pro, Google, HBO y más de forma inmediata. 100% seguro y con soporte garantizado.
               </p>
               <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
                 <a href="https://wa.me/51924545856?text=Hola%20SuscriTech%20Global,%20quiero%20informaci%C3%B3n%20sobre%20los%20servicios%20Pro"
@@ -170,7 +168,7 @@ export default function Inicio() {
             </section>
           )}
 
-          {/* Todos los servicios con Paginador */}
+          {/* Catálogo de Servicios */}
           <section>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
               <h2 style={{ fontFamily: 'var(--fuente-display)', fontSize: 20, fontWeight: 700 }}>
@@ -178,13 +176,13 @@ export default function Inicio() {
                 <span style={{ color: '#06b6d4' }}>.</span>
               </h2>
               <span style={{ fontSize: 13, color: '#94a3b8' }}>
-                {productosFiltrados.length} servicios
+                {productosFiltrados.length} servicios disponibles
               </span>
             </div>
             {cargando ? <div className="spinner" /> : productosFiltrados.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '40px 0', color: '#94a3b8' }}>
                 <Package size={48} style={{ margin: '0 auto 12px', opacity: 0.3 }} />
-                <p>Aún no hay servicios registrados en el catálogo</p>
+                <p>No hay servicios disponibles en este momento</p>
               </div>
             ) : (
               <>
@@ -215,7 +213,7 @@ export default function Inicio() {
                 SuscriTech Global<span style={{ color: '#06b6d4' }}>.</span>
               </h3>
               <p style={{ fontSize: 13, color: '#94a3b8', lineHeight: 1.7 }}>
-                Tu plataforma de confianza para suscripciones y cuentas digitales Pro. Activamos primero tu servicio en tu correo y luego realizas el pago con total seguridad.
+                Tu plataforma de confianza para suscripciones y cuentas digitales Pro. ¡Adquiere primero y luego realiza el pago con total seguridad!
               </p>
             </div>
             <div>
@@ -231,7 +229,7 @@ export default function Inicio() {
             <div>
               <h4 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12, color: '#06b6d4' }}>📱 Contacto Directo</h4>
               <p style={{ fontSize: 13, color: '#94a3b8', marginBottom: 10 }}>
-                Atención inmediata 100% online. Activación directa en tu cuenta.
+                Atención inmediata 100% online.
               </p>
               <a href="https://wa.me/51924545856?text=Hola%20SuscriTech%20Global,%20deseo%20adquirir%20una%20suscripci%C3%B3n" target="_blank" rel="noreferrer"
                 style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#fff', background: '#10b981', borderRadius: 8, padding: '8px 14px', textDecoration: 'none', fontWeight: 700 }}>
