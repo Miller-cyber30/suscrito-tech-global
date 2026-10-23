@@ -14,21 +14,35 @@ export const useCarrito = create(
       items: [],
       agregar: (producto) => {
         const items = get().items
-        const existente = items.find(i => i.id === producto.id)
+        const key = producto.cartKey || producto.id
+        const existente = items.find(i => (i.cartKey || i.id) === key)
         if (existente) {
-          set({ items: items.map(i => i.id === producto.id ? { ...i, cantidad: i.cantidad + 1 } : i) })
+          set({
+            items: items.map(i =>
+              (i.cartKey || i.id) === key ? { ...i, cantidad: i.cantidad + 1 } : i
+            )
+          })
         } else {
-          set({ items: [...items, { ...producto, cantidad: 1, tienda: producto.tienda || 'miller' }] })
+          set({
+            items: [
+              ...items,
+              { ...producto, cartKey: key, cantidad: 1, tienda: 'miller' }
+            ]
+          })
         }
       },
-      quitar: (id) => set({ items: get().items.filter(i => i.id !== id) }),
-      cambiarCantidad: (id, cantidad) => {
+      quitar: (key) => set({ items: get().items.filter(i => (i.cartKey || i.id) !== key) }),
+      cambiarCantidad: (key, cantidad) => {
         if (cantidad < 1) return
-        set({ items: get().items.map(i => i.id === id ? { ...i, cantidad } : i) })
+        set({
+          items: get().items.map(i =>
+            (i.cartKey || i.id) === key ? { ...i, cantidad } : i
+          )
+        })
       },
       limpiar: () => set({ items: [] }),
       limpiarPorTienda: () => set({ items: [] }),
-      total: () => get().items.reduce((acc, i) => acc + i.precio * i.cantidad, 0),
+      total: () => get().items.reduce((acc, i) => acc + Number(i.precio) * i.cantidad, 0),
       cantidad: () => get().items.reduce((acc, i) => acc + i.cantidad, 0),
     }),
     { name: 'carrito-suscritech' }
