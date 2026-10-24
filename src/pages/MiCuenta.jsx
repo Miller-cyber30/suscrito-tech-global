@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../store'
 import Navbar from '../components/Navbar'
-import { Camera, Clock, RefreshCw, Save, PlusCircle, X, CheckCircle, Link2 } from 'lucide-react'
+import { Camera, Clock, RefreshCw, Save, PlusCircle, X, CheckCircle, Link2, Lock, Eye, EyeOff } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 export default function MiCuenta() {
@@ -25,6 +25,13 @@ export default function MiCuenta() {
   const [guardando, setGuardando]             = useState(false)
   const [subiendo, setSubiendo]               = useState(false)
 
+  // Estados para cambiar contraseña verificando la contraseña anterior
+  const [passActual, setPassActual]           = useState('')
+  const [passNueva, setPassNueva]             = useState('')
+  const [passConfirmar, setPassConfirmar]     = useState('')
+  const [verPasswords, setVerPasswords]       = useState(false)
+  const [cambiandoPass, setCambiandoPass]     = useState(false)
+
   useEffect(() => {
     if (!usuario) { navigate('/login'); return }
     if (perfil) {
@@ -39,7 +46,6 @@ export default function MiCuenta() {
 
   async function cargarMisSuscripciones() {
     if (!usuario) return
-    // Trae suscripciones que coincidan con su correo O que hayan sido asociadas a su usuario por el Admin
     const [{ data: porCorreo }, { data: porId }] = await Promise.all([
       supabase
         .from('venta_items')
@@ -63,7 +69,6 @@ export default function MiCuenta() {
 
   async function cargarProductosYSolicitudes() {
     if (!usuario) return
-    // Carga TODOS los productos de la base de datos aunque no tengan stock
     const [{ data: prods }, { data: sols }] = await Promise.all([
       supabase.from('productos').select('id, nombre, imagen_url, tienda').order('nombre'),
       supabase
@@ -104,14 +109,35 @@ export default function MiCuenta() {
     if (!file || !usuario) return
     setSubiendo(true)
     try {
-      const ext = file.name.split('.').pop()
+      const ext = (file.name.split('.').pop() || 'jpg').toLowerCase()
       const path = `perfiles/user_${usuario.id}_${Date.now()}.${ext}`
-      const { error } = await supabase.storage.from('imagenes').upload(path, file, { upsert: true })
-      if (error) throw error
-      const { data } = supabase.storage.from('imagenes').getPublicUrl(path)
-      setAvatarUrl(data.publicUrl)
-      toast.success('Foto cargada. Dale a Guardar para confirmar.')
-    } catch (err) { toast.error('Error al subir: ' + err.message) }
+      const { error: errUp } = await supabase.storage.from('imagenes').upload(path, file, { upsert: true })
+      if (errUp) throw errUp
+
+      const { data: pub } = supabase.storage.from('imagenes').getPublicUrl(path)
+      const nuevaUrl = pub.publicUrl
+      setAvatarUrl(nuevaUrl)
+
+      // Guarda inmediatamente la foto en la tabla perfiles con upsert
+      const { data: perfilActualizado, error: errPerfil } = await supabase
+        .from('perfiles')
+        .upsert({
+          id: usuario.id,
+          email: usuario.email,
+          nombre: nombre || perfil?.nombre || usuario.email.split('@')[0],
+          telefono: telefono || perfil?.telefono || null,
+          avatar_url: nuevaUrl,
+          recibir_alertas: recibirAlertas
+        }, { onConflict: 'id' })
+        .select()
+        .single()
+
+      if (errPerfil) throw errPerfil
+      setPerfil(perfilActualizado)
+      toast.success('¡Foto de perfil actualizada! ✅')
+    } catch (err) {
+      toast.error('Error al subir: ' + err.message)
+    }
     setSubiendo(false)
   }
 
@@ -119,17 +145,61 @@ export default function MiCuenta() {
     if (!usuario) return
     setGuardando(true)
     const payload = {
+      id: usuario.id,
       nombre,
       telefono,
       email: usuario.email,
       avatar_url: avatarUrl,
       recibir_alertas: recibirAlertas
     }
-    const { data, error } = await supabase.from('perfiles').update(payload).eq('id', usuario.id).select().single()
-    if (error) { toast.error('Error: ' + error.message); setGuardando(false); return }
+    const { data, error } = await supabase
+      .from('perfiles')
+      .upsert(payload, { onConflict: 'id' })
+      .select()
+      .single()
+
+    if (error) {
+      toast.error('Error: ' + error.message)
+      setGuardando(false)
+      return
+    }
     setPerfil(data)
     toast.success('¡Tu cuenta ha sido actualizada! ✅')
     setGuardando(false)
+  }
+
+  async function handleCambiarPassword(e) {
+    e.preventDefault()
+    if (!passActual) return toast.error('Ingresa tu contraseña anterior')
+    if (passNueva.length < 6) return toast.error('La nueva contraseña debe tener al menos 6 caracteres')
+    if (passNueva !== passConfirmar) return toast.error('La nueva contraseña y la confirmación no coinciden')
+
+    setCambiandoPass(true)
+    try {
+      // 1. Verifica que la contraseña anterior sea la correcta
+      const { error: errCheck } = await supabase.auth.signInWithPassword({
+        email: usuario.email,
+        password: passActual
+      })
+      if (errCheck) {
+        setCambiandoPass(false)
+        return toast.error('Tu contraseña anterior es incorrecta ❌')
+      }
+
+      // 2. Actualiza a la nueva contraseña
+      const { error: errUpd } = await supabase.auth.updateUser({
+        password: passNueva
+      })
+      if (errUpd) throw errUpd
+
+      toast.success('¡Contraseña actualizada correctamente! 🔐')
+      setPassActual('')
+      setPassNueva('')
+      setPassConfirmar('')
+    } catch (err) {
+      toast.error('Error al cambiar contraseña: ' + err.message)
+    }
+    setCambiandoPass(false)
   }
 
   const diasRestantes = (fecha) => {
@@ -147,48 +217,103 @@ export default function MiCuenta() {
           Mi Cuenta y Suscripciones<span style={{ color: '#06b6d4' }}>.</span>
         </h1>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20 }}>
-          {/* Tarjeta de Configuración de Perfil */}
-          <div className="card" style={{ padding: 22, background: 'rgba(30,41,59,0.85)', color: '#fff', border: '1px solid rgba(124, 58, 237, 0.3)' }}>
-            <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>Datos de tu Perfil</h2>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
-              {avatarUrl ? (
-                <img src={avatarUrl} alt="Avatar" style={{ width: 64, height: 64, borderRadius: '50%', objectFit: 'cover', border: '2px solid #06b6d4' }} />
-              ) : (
-                <div style={{ width: 64, height: 64, borderRadius: '50%', background: '#7c3aed', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, fontWeight: 800 }}>
-                  {(nombre || usuario?.email || 'U')[0].toUpperCase()}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20, alignItems: 'start' }}>
+          {/* Columna Izquierda: Datos del Perfil + Cambio de Contraseña */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            <div className="card" style={{ padding: 22, background: 'rgba(30,41,59,0.85)', color: '#fff', border: '1px solid rgba(124, 58, 237, 0.3)' }}>
+              <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>Datos de tu Perfil</h2>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
+                {avatarUrl ? (
+                  <img src={avatarUrl} alt="Avatar" style={{ width: 64, height: 64, borderRadius: '50%', objectFit: 'cover', border: '2px solid #06b6d4' }} />
+                ) : (
+                  <div style={{ width: 64, height: 64, borderRadius: '50%', background: '#7c3aed', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, fontWeight: 800 }}>
+                    {(nombre || usuario?.email || 'U')[0].toUpperCase()}
+                  </div>
+                )}
+                <div>
+                  <input ref={fileRef} type="file" accept="image/*" onChange={subirFoto} style={{ display: 'none' }} />
+                  <button onClick={() => fileRef.current.click()} disabled={subiendo} className="btn-ghost" style={{ fontSize: 12, color: '#06b6d4' }}>
+                    <Camera size={14} /> {subiendo ? 'Subiendo...' : 'Cambiar foto'}
+                  </button>
+                  <p style={{ fontSize: 11, opacity: 0.7, marginTop: 4 }}>{usuario?.email}</p>
                 </div>
-              )}
-              <div>
-                <input ref={fileRef} type="file" accept="image/*" onChange={subirFoto} style={{ display: 'none' }} />
-                <button onClick={() => fileRef.current.click()} className="btn-ghost" style={{ fontSize: 12, color: '#06b6d4' }}>
-                  <Camera size={14} /> {subiendo ? 'Subiendo...' : 'Cambiar foto'}
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Nombre completo</label>
+                  <input value={nombre} onChange={e => setNombre(e.target.value)} placeholder="Tu nombre" />
+                </div>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>WhatsApp</label>
+                  <input value={telefono} onChange={e => setTelefono(e.target.value)} placeholder="Ej: 987654321" />
+                </div>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, cursor: 'pointer' }}>
+                  <input type="checkbox" checked={recibirAlertas} onChange={e => setRecibirAlertas(e.target.checked)} style={{ width: 16, height: 16 }} />
+                  Recibir avisos cuando mi servicio esté próximo a vencer
+                </label>
+
+                <button onClick={guardarPerfil} disabled={guardando} className="btn-primary" style={{ justifyContent: 'center', marginTop: 6, background: 'linear-gradient(135deg, #7c3aed, #06b6d4)', border: 'none' }}>
+                  <Save size={15} /> {guardando ? 'Guardando...' : 'Guardar configuración'}
                 </button>
-                <p style={{ fontSize: 11, opacity: 0.7, marginTop: 4 }}>{usuario?.email}</p>
               </div>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div>
-                <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Nombre completo</label>
-                <input value={nombre} onChange={e => setNombre(e.target.value)} placeholder="Tu nombre" />
+            {/* Tarjeta de Actualizar Contraseña */}
+            <div className="card" style={{ padding: 22, background: 'rgba(30,41,59,0.85)', color: '#fff', border: '1px solid rgba(124, 58, 237, 0.3)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                <h2 style={{ fontSize: 16, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Lock size={17} color="#06b6d4" /> Actualizar Contraseña
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => setVerPasswords(!verPasswords)}
+                  style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 11 }}>
+                  {verPasswords ? <EyeOff size={14} /> : <Eye size={14} />}
+                  {verPasswords ? 'Ocultar' : 'Mostrar'}
+                </button>
               </div>
-              <div>
-                <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>WhatsApp</label>
-                <input value={telefono} onChange={e => setTelefono(e.target.value)} placeholder="Ej: 987654321" />
-              </div>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, cursor: 'pointer' }}>
-                <input type="checkbox" checked={recibirAlertas} onChange={e => setRecibirAlertas(e.target.checked)} style={{ width: 16, height: 16 }} />
-                Recibir avisos cuando mi servicio esté próximo a vencer
-              </label>
 
-              <button onClick={guardarPerfil} disabled={guardando} className="btn-primary" style={{ justifyContent: 'center', marginTop: 6, background: 'linear-gradient(135deg, #7c3aed, #06b6d4)', border: 'none' }}>
-                <Save size={15} /> {guardando ? 'Guardando...' : 'Guardar configuración'}
-              </button>
+              <form onSubmit={handleCambiarPassword} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Contraseña anterior *</label>
+                  <input
+                    type={verPasswords ? 'text' : 'password'}
+                    value={passActual}
+                    onChange={e => setPassActual(e.target.value)}
+                    placeholder="Escribe tu contraseña actual"
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Nueva contraseña *</label>
+                  <input
+                    type={verPasswords ? 'text' : 'password'}
+                    value={passNueva}
+                    onChange={e => setPassNueva(e.target.value)}
+                    placeholder="Mínimo 6 caracteres"
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Confirmar nueva contraseña *</label>
+                  <input
+                    type={verPasswords ? 'text' : 'password'}
+                    value={passConfirmar}
+                    onChange={e => setPassConfirmar(e.target.value)}
+                    placeholder="Repite la nueva contraseña"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={cambiandoPass}
+                  className="btn-primary"
+                  style={{ justifyContent: 'center', marginTop: 4, background: 'linear-gradient(135deg, #7c3aed, #06b6d4)', border: 'none' }}>
+                  <Lock size={15} /> {cambiandoPass ? 'Actualizando...' : 'Actualizar contraseña'}
+                </button>
+              </form>
             </div>
           </div>
 
-          {/* Tarjeta de Suscripciones y Solicitud de Asociación */}
+          {/* Columna Derecha: Suscripciones y Solicitud de Asociación */}
           <div className="card" style={{ padding: 22, background: 'rgba(30,41,59,0.85)', color: '#fff', border: '1px solid rgba(124, 58, 237, 0.3)' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
               <h2 style={{ fontSize: 16, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -247,7 +372,6 @@ export default function MiCuenta() {
               </div>
             )}
 
-            {/* Historial de Solicitudes de Asociación del Cliente */}
             {misSolicitudes.length > 0 && (
               <div style={{ marginTop: 18, borderTop: '1px solid rgba(148,163,184,0.2)', paddingTop: 14 }}>
                 <p style={{ fontSize: 12, fontWeight: 700, color: '#94a3b8', marginBottom: 8 }}>
