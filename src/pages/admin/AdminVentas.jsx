@@ -9,6 +9,22 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGri
 import jsPDF from 'jspdf'
 import 'jspdf-autotable'
 
+function formatearFecha(valor) {
+  if (!valor) return 'N/A'
+  const str = String(valor).trim()
+  const soloFecha = str.split('T')[0]
+  if (/^\d{4}-\d{2}-\d{2}$/.test(soloFecha)) {
+    const [anio, mes, dia] = soloFecha.split('-')
+    return `${dia}/${mes}/${anio}`
+  }
+  const d = new Date(str)
+  if (isNaN(d.getTime())) return str
+  const dia = String(d.getDate()).padStart(2, '0')
+  const mes = String(d.getMonth() + 1).padStart(2, '0')
+  const anio = d.getFullYear()
+  return `${dia}/${mes}/${anio}`
+}
+
 export default function AdminVentas() {
   const [tabActual, setTabActual]           = useState('historial')
   const [ventas, setVentas]                 = useState([])
@@ -20,8 +36,7 @@ export default function AdminVentas() {
   const [busquedaVentas, setBusquedaVentas] = useState('')
   const [guardando, setGuardando]           = useState(false)
 
-  // Modal rápido para asociar una venta existente del historial a un cliente registrado
-  const [itemAsociar, setItemAsociar]       = useState(null)
+  const [itemAsociar, setItemAsociar]           = useState(null)
   const [usuarioAsociarId, setUsuarioAsociarId] = useState('')
 
   const [paginaActual, setPaginaActual]     = useState(1)
@@ -223,16 +238,16 @@ export default function AdminVentas() {
 
   const exportarTXT = () => {
     if (lineasFiltradas.length === 0) return toast.error('No hay ventas para exportar')
-    let contenido = `HISTORIAL DE SUSCRIPCIONES - SUSCRITECH GLOBAL\nDesde: ${desde} - Hasta: ${hasta}\n\n`
+    let contenido = `HISTORIAL DE SUSCRIPCIONES - SUSCRITECH GLOBAL\nDesde: ${formatearFecha(desde)} - Hasta: ${formatearFecha(hasta)}\n\n`
     contenido += `FECHA       | SERVICIO                  | CLIENTE              | CORREO                    | PLATAFORMA   | VENCE      | SUBTOTAL\n`
     contenido += `-------------------------------------------------------------------------------------------------------------------------------------\n`
     lineasFiltradas.forEach(l => {
-      const f = new Date(l.fecha).toLocaleDateString('es-PE').padEnd(11, ' ')
+      const f = formatearFecha(l.fecha).padEnd(11, ' ')
       const s = (l.nombre_producto || '').substring(0, 24).padEnd(25, ' ')
       const c = (l.cliente_nombre || '').substring(0, 19).padEnd(20, ' ')
       const m = (l.cliente_correo || '').substring(0, 24).padEnd(25, ' ')
       const p = (l.plataforma_venta || '').substring(0, 11).padEnd(12, ' ')
-      const v = (l.fecha_vencimiento || '').padEnd(10, ' ')
+      const v = formatearFecha(l.fecha_vencimiento).padEnd(10, ' ')
       const sub = Number(l.subtotal).toFixed(2).padStart(8, ' ')
       contenido += `${f} | ${s} | ${c} | ${m} | ${p} | ${v} | ${sub}\n`
     })
@@ -249,17 +264,17 @@ export default function AdminVentas() {
     const doc = new jsPDF('landscape')
     doc.text(`Registro de Suscripciones - SuscriTech Global`, 14, 15)
     doc.setFontSize(10)
-    doc.text(`Desde: ${desde} - Hasta: ${hasta}`, 14, 22)
+    doc.text(`Desde: ${formatearFecha(desde)} - Hasta: ${formatearFecha(hasta)}`, 14, 22)
 
     const tableData = lineasFiltradas.map(l => [
-      new Date(l.fecha).toLocaleDateString('es-PE'),
+      formatearFecha(l.fecha),
       l.nombre_producto,
       l.cliente_nombre || '',
       l.cliente_whatsapp || '',
       l.cliente_correo || '',
       l.plataforma_venta || '',
       `${l.duracion_meses || 1} m`,
-      l.fecha_vencimiento || '',
+      formatearFecha(l.fecha_vencimiento),
       `S/ ${Number(l.subtotal).toFixed(2)}`
     ])
     doc.autoTable({
@@ -275,26 +290,25 @@ export default function AdminVentas() {
     exportarCSV('ventas_suscritech', [
       ['Fecha', 'Servicio', 'Cliente', 'WhatsApp', 'Correo', 'Plataforma', 'Meses', 'Vencimiento', 'Subtotal'],
       ...lineasFiltradas.map(l => [
-        new Date(l.fecha).toLocaleDateString('es-PE'),
+        formatearFecha(l.fecha),
         l.nombre_producto,
         l.cliente_nombre || '',
         l.cliente_whatsapp || '',
         l.cliente_correo || '',
         l.plataforma_venta || '',
         l.duracion_meses || 1,
-        l.fecha_vencimiento || '',
+        formatearFecha(l.fecha_vencimiento),
         Number(l.subtotal).toFixed(2)
       ])
     ])
     toast.success('Excel exportado')
   }
 
-  // --- LÓGICA DE ANÁLISIS ---
   let ingresoTotal = 0; let productosVendidosStats = 0
   const productosStats = {}; const ventasPorDia = {}
 
   lineasFiltradas.forEach(l => {
-    const dia = new Date(l.fecha).toISOString().split('T')[0]
+    const dia = formatearFecha(l.fecha)
     if (!ventasPorDia[dia]) ventasPorDia[dia] = 0
     ventasPorDia[dia] += Number(l.subtotal)
 
@@ -310,7 +324,7 @@ export default function AdminVentas() {
   const promedioVentaDiaria = ingresoTotal / diasTotales
   const statsArray = Object.values(productosStats)
 
-  const chartDiasData = Object.keys(ventasPorDia).map(k => ({ Fecha: k, Ingreso: parseFloat(ventasPorDia[k].toFixed(2)) })).sort((a, b) => a.Fecha.localeCompare(b.Fecha))
+  const chartDiasData = Object.keys(ventasPorDia).map(k => ({ Fecha: k, Ingreso: parseFloat(ventasPorDia[k].toFixed(2)) }))
   const chartData = statsArray.sort((a, b) => b.ingreso - a.ingreso).slice(0, 10).map(p => ({ name: p.nombre.substring(0, 15) + '...', Ingreso: parseFloat(p.ingreso.toFixed(2)), Unidades: p.cantidad }))
 
   const limiteValido = Math.max(1, Number(itemsPorPagina) || 50)
@@ -365,14 +379,14 @@ export default function AdminVentas() {
 
               <div style={{ marginLeft: 'auto', textAlign: 'right', minWidth: '120px' }}>
                 <p style={{ fontSize: 12, color: 'var(--texto-suave)' }}>{totalProductos} suscripciones</p>
-                <p style={{ fontFamily: 'var(--fuente-display)', fontWeight: 700, fontSize: 18, color: '#06b6d4' }}>
+                <p style={{ fontFamily: 'var(--fuente-cuerpo)', fontVariantNumeric: 'tabular-nums', fontWeight: 800, fontSize: 18, color: '#06b6d4' }}>
                   S/ {totalPeriodo.toFixed(2)}
                 </p>
               </div>
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
-              <button onClick={abrirModal} className="btn-primary" style={{ gap: 6, width: '100%', maxWidth: 260, justifyContent: 'center', background: 'linear-gradient(135deg, #7c3aed, #06b6d4)', border: 'none' }}>
+              <button onClick={abrirModal} className="btn-primary" style={{ gap: 6, width: '100%', maxWidth: 260, justifyContent: 'center' }}>
                 <Plus size={15} /> Registrar Suscripción Digital
               </button>
             </div>
@@ -399,7 +413,7 @@ export default function AdminVentas() {
 
                       <div style={{ flex: 1, minWidth: 200 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                          <p style={{ fontSize: 14, fontWeight: 600 }}>{l.nombre_producto}</p>
+                          <p style={{ fontSize: 14, fontWeight: 700 }}>{l.nombre_producto}</p>
                           {l.plataforma_venta && (
                             <span style={{ fontSize: 10, fontWeight: 700, background: 'rgba(124, 58, 237, 0.2)', color: '#c4b5fd', padding: '2px 8px', borderRadius: 12 }}>
                               {l.plataforma_venta}
@@ -407,7 +421,7 @@ export default function AdminVentas() {
                           )}
                           {l.duracion_meses && (
                             <span style={{ fontSize: 10, fontWeight: 700, background: 'rgba(6, 182, 212, 0.2)', color: '#38bdf8', padding: '2px 8px', borderRadius: 12 }}>
-                              {l.duracion_meses} meses
+                              {l.duracion_meses} {Number(l.duracion_meses) === 1 ? 'mes' : 'meses'}
                             </span>
                           )}
                           {usuarioVinculado && (
@@ -417,15 +431,15 @@ export default function AdminVentas() {
                           )}
                         </div>
 
-                        <p style={{ fontSize: 11, color: 'var(--texto-suave)', marginTop: 3, lineHeight: 1.4 }}>
+                        <p style={{ fontSize: 11.5, color: 'var(--texto-suave)', marginTop: 4, lineHeight: 1.4, fontVariantNumeric: 'tabular-nums' }}>
                           👤 <b style={{ color: 'var(--texto)' }}>{l.cliente_nombre || 'Cliente'}</b> · 📱 {l.cliente_whatsapp || 'S/N'} · ✉️ {l.cliente_correo || 'S/C'}
                           <br />
-                          📅 Compra: {new Date(l.fecha).toLocaleDateString('es-PE')} · ⏳ <b style={{ color: '#f87171' }}>Vence: {l.fecha_vencimiento || 'N/A'}</b>
+                          📅 Adquirido: <b>{formatearFecha(l.fecha)}</b> &nbsp;·&nbsp; ⏳ <b style={{ color: '#f87171' }}>Vence: {formatearFecha(l.fecha_vencimiento)}</b>
                         </p>
                       </div>
 
                       <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                        <p style={{ fontFamily: 'var(--fuente-display)', fontWeight: 700, fontSize: 15, color: '#06b6d4' }}>
+                        <p style={{ fontFamily: 'var(--fuente-cuerpo)', fontVariantNumeric: 'tabular-nums', fontWeight: 800, fontSize: 15, color: '#06b6d4' }}>
                           S/ {Number(l.subtotal).toFixed(2)}
                         </p>
                       </div>
@@ -461,7 +475,6 @@ export default function AdminVentas() {
         </>
       )}
 
-      {/* TAB ANÁLISIS */}
       {tabActual === 'analisis' && (
         <div className="analisis-container">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 24 }}>
@@ -512,7 +525,6 @@ export default function AdminVentas() {
         </div>
       )}
 
-      {/* MODAL PARA ASOCIAR UNA VENTA EXISTENTE A UN USUARIO REGISTRADO */}
       {itemAsociar && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 250, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
           <div className="card" style={{ width: '100%', maxWidth: 440, padding: 24, borderTop: '4px solid #06b6d4' }}>
@@ -532,7 +544,7 @@ export default function AdminVentas() {
             </select>
             <div style={{ display: 'flex', gap: 10 }}>
               <button onClick={() => setItemAsociar(null)} className="btn-ghost" style={{ flex: 1, justifyContent: 'center' }}>Cancelar</button>
-              <button onClick={guardarAsociacionRapida} className="btn-primary" style={{ flex: 1, justifyContent: 'center', background: 'linear-gradient(135deg, #7c3aed, #06b6d4)', border: 'none' }}>
+              <button onClick={guardarAsociacionRapida} className="btn-primary" style={{ flex: 1, justifyContent: 'center' }}>
                 Guardar Vínculo
               </button>
             </div>
@@ -540,7 +552,6 @@ export default function AdminVentas() {
         </div>
       )}
 
-      {/* MODAL REGISTRAR NUEVA SUSCRIPCIÓN DIGITAL */}
       {modalVenta && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(2, 6, 23, 0.78)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
           <div className="card" style={{ width: '100%', maxWidth: 540, maxHeight: '92vh', overflowY: 'auto', padding: 24, borderTop: '4px solid #7c3aed' }}>
@@ -568,7 +579,6 @@ export default function AdminVentas() {
                 </select>
               </div>
 
-              {/* Vincular opcionalmente a un usuario registrado */}
               <div>
                 <label style={{ fontSize: 11, fontWeight: 700, display: 'block', marginBottom: 4, color: '#06b6d4' }}>
                   🔗 Asociar a Usuario Registrado en la Web (Opcional)
@@ -680,13 +690,15 @@ export default function AdminVentas() {
                     <input type="number" min="1" value={formDigital.duracion_meses} onChange={e => setFormDigital({ ...formDigital, duracion_meses: e.target.value })} style={{ fontSize: 12 }} />
                   </div>
                   <div>
-                    <label style={{ fontSize: 11, fontWeight: 800, color: '#06b6d4', display: 'block', marginBottom: 4 }}>Vencimiento</label>
+                    <label style={{ fontSize: 11, fontWeight: 800, color: '#06b6d4', display: 'block', marginBottom: 4 }}>
+                      Vence ({formatearFecha(formDigital.fecha_vencimiento)})
+                    </label>
                     <input type="date" value={formDigital.fecha_vencimiento} onChange={e => setFormDigital({ ...formDigital, fecha_vencimiento: e.target.value })} style={{ fontSize: 12, fontWeight: 700, border: '1.5px solid #06b6d4' }} />
                   </div>
                 </div>
               </div>
 
-              <button onClick={guardarVentaDigital} disabled={guardando} className="btn-primary" style={{ width: '100%', justifyContent: 'center', padding: 12, background: 'linear-gradient(135deg, #7c3aed, #06b6d4)', border: 'none', marginTop: 4 }}>
+              <button onClick={guardarVentaDigital} disabled={guardando} className="btn-primary" style={{ width: '100%', justifyContent: 'center', padding: 12, marginTop: 4 }}>
                 {guardando ? 'Registrando...' : 'Registrar Suscripción'}
               </button>
             </div>
