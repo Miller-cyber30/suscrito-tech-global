@@ -1,78 +1,73 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { Cpu, Eye, EyeOff, KeyRound, Mail, CheckCircle } from 'lucide-react'
+import { Cpu, Eye, EyeOff, Lock, Mail } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 export default function Login() {
-  const [email, setEmail]               = useState('')
-  const [password, setPassword]         = useState('')
-  const [nombre, setNombre]             = useState('')
-  const [telefono, setTelefono]         = useState('')
-  const [verPass, setVerPass]           = useState(false)
+  const [email, setEmail]                 = useState('')
+  const [password, setPassword]           = useState('')
+  const [nombre, setNombre]               = useState('')
+  const [telefono, setTelefono]           = useState('')
+  const [verPass, setVerPass]             = useState(false)
 
-  // Modos: 'login' | 'registro' | 'recuperar_correo' | 'recuperar_codigo'
-  const [modo, setModo]                 = useState('login')
-  const [codigoOtp, setCodigoOtp]       = useState('')
-  const [nuevaPass, setNuevaPass]       = useState('')
+  // Modos: 'login' | 'registro' | 'recuperar' | 'nueva_pass'
+  const [modo, setModo]                   = useState('login')
+  const [nuevaPass, setNuevaPass]         = useState('')
   const [confirmarPass, setConfirmarPass] = useState('')
-  const [cargando, setCargando]         = useState(false)
+  const [cargando, setCargando]           = useState(false)
 
   const navigate = useNavigate()
+
+  useEffect(() => {
+    // Detecta si el usuario acaba de abrir el link de recuperación desde su correo
+    const params = new URLSearchParams(window.location.search)
+    const hash = window.location.hash || ''
+    if (params.get('reset') === 'true' || hash.includes('type=recovery')) {
+      setModo('nueva_pass')
+    }
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setModo('nueva_pass')
+      }
+    })
+
+    return () => subscription.unsubscribe()
+  }, [])
 
   async function handleSubmit(e) {
     e.preventDefault()
 
-    // 1. ENVIAR CÓDIGO DE RECUPERACIÓN AL CORREO
-    if (modo === 'recuperar_correo') {
+    // 1. ENVIAR LINK DE RECUPERACIÓN AL CORREO
+    if (modo === 'recuperar') {
       if (!email.trim()) return toast.error('Ingresa tu correo electrónico')
       setCargando(true)
-      const { error } = await supabase.auth.resetPasswordForEmail(email.trim())
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: `${window.location.origin}/login?reset=true`
+      })
       setCargando(false)
-      if (error) return toast.error('Error al enviar código: ' + error.message)
-      toast.success('¡Código enviado a tu correo! Revisa tu bandeja de entrada o spam 📩')
-      setModo('recuperar_codigo')
+      if (error) return toast.error('Error al enviar correo: ' + error.message)
+      toast.success('¡Te enviamos el enlace de recuperación! Revisa tu correo (y la carpeta de Spam) 📩', { duration: 6000 })
+      setModo('login')
       return
     }
 
-    // 2. VERIFICAR CÓDIGO Y GUARDAR NUEVA CONTRASEÑA
-    if (modo === 'recuperar_codigo') {
-      if (!codigoOtp.trim()) return toast.error('Ingresa el código que llegó a tu correo')
+    // 2. GUARDAR LA NUEVA CONTRASEÑA TRAS ABRIR EL LINK DEL CORREO
+    if (modo === 'nueva_pass') {
       if (nuevaPass.length < 6) return toast.error('La nueva contraseña debe tener al menos 6 caracteres')
       if (nuevaPass !== confirmarPass) return toast.error('Las contraseñas no coinciden')
 
       setCargando(true)
-      // Verifica el código OTP de recuperación enviado al correo
-      let { error: errOtp } = await supabase.auth.verifyOtp({
-        email: email.trim(),
-        token: codigoOtp.trim(),
-        type: 'recovery'
-      })
-
-      if (errOtp) {
-        // Fallback por si el código se envió como tipo email
-        const retry = await supabase.auth.verifyOtp({
-          email: email.trim(),
-          token: codigoOtp.trim(),
-          type: 'email'
-        })
-        errOtp = retry.error
-      }
-
-      if (errOtp) {
-        setCargando(false)
-        return toast.error('Código inválido o expirado. Verifica e inténtalo de nuevo.')
-      }
-
-      const { error: errUpdate } = await supabase.auth.updateUser({
+      const { error } = await supabase.auth.updateUser({
         password: nuevaPass
       })
       setCargando(false)
 
-      if (errUpdate) return toast.error('Error al actualizar contraseña: ' + errUpdate.message)
+      if (error) return toast.error('Error al actualizar contraseña: ' + error.message)
 
       toast.success('¡Contraseña actualizada con éxito! 🎉')
-      navigate('/')
+      navigate('/mi-cuenta')
       return
     }
 
@@ -145,8 +140,8 @@ export default function Login() {
           <p style={{ fontSize: 13, color: '#94a3b8', marginTop: 6 }}>
             {modo === 'login' && 'Ingresa a tu cuenta para gestionar tus pedidos y suscripciones'}
             {modo === 'registro' && 'Crea tu cuenta gratis en segundos'}
-            {modo === 'recuperar_correo' && 'Te enviaremos un código a tu correo para restablecer tu contraseña'}
-            {modo === 'recuperar_codigo' && `Ingresa el código enviado a ${email}`}
+            {modo === 'recuperar' && 'Ingresa tu correo y te enviaremos un enlace para cambiar tu contraseña'}
+            {modo === 'nueva_pass' && 'Escribe tu nueva contraseña para recuperar el acceso'}
           </p>
         </div>
 
@@ -171,9 +166,12 @@ export default function Login() {
               </>
             )}
 
-            {modo !== 'recuperar_codigo' && (
+            {modo !== 'nueva_pass' && (
               <div>
-                <label style={{ fontSize: 13, fontWeight: 500, marginBottom: 6, display: 'block' }}>Correo electrónico *</label>
+                <label style={{ fontSize: 13, fontWeight: 500, marginBottom: 6, display: 'block' }}>
+                  <Mail size={13} style={{ display: 'inline', marginRight: 5, color: '#06b6d4' }} />
+                  Correo electrónico *
+                </label>
                 <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="correo@ejemplo.com" />
               </div>
             )}
@@ -185,7 +183,7 @@ export default function Login() {
                   {modo === 'login' && (
                     <button
                       type="button"
-                      onClick={() => setModo('recuperar_correo')}
+                      onClick={() => setModo('recuperar')}
                       style={{ background: 'none', border: 'none', fontSize: 12, color: '#06b6d4', cursor: 'pointer', fontWeight: 600 }}>
                       ¿Olvidaste tu contraseña?
                     </button>
@@ -201,29 +199,26 @@ export default function Login() {
               </div>
             )}
 
-            {modo === 'recuperar_codigo' && (
+            {modo === 'nueva_pass' && (
               <>
                 <div>
                   <label style={{ fontSize: 13, fontWeight: 600, marginBottom: 6, display: 'block', color: '#06b6d4' }}>
-                    <KeyRound size={14} style={{ display: 'inline', marginRight: 5 }} />
-                    Código recibido en tu correo *
+                    <Lock size={14} style={{ display: 'inline', marginRight: 5 }} />
+                    Nueva contraseña *
                   </label>
-                  <input
-                    value={codigoOtp}
-                    onChange={e => setCodigoOtp(e.target.value)}
-                    placeholder="Ej: 123456"
-                    style={{ textAlign: 'center', fontSize: 18, fontWeight: 800, letterSpacing: 4 }}
-                  />
-                </div>
-
-                <div>
-                  <label style={{ fontSize: 13, fontWeight: 500, marginBottom: 6, display: 'block' }}>Nueva contraseña *</label>
-                  <input
-                    type={verPass ? 'text' : 'password'}
-                    value={nuevaPass}
-                    onChange={e => setNuevaPass(e.target.value)}
-                    placeholder="Mínimo 6 caracteres"
-                  />
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type={verPass ? 'text' : 'password'}
+                      value={nuevaPass}
+                      onChange={e => setNuevaPass(e.target.value)}
+                      placeholder="Mínimo 6 caracteres"
+                      style={{ paddingRight: 42 }}
+                    />
+                    <button type="button" onClick={() => setVerPass(!verPass)}
+                      style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--texto-suave)', cursor: 'pointer', padding: 0, display: 'flex' }}>
+                      {verPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
                 </div>
 
                 <div>
@@ -251,19 +246,10 @@ export default function Login() {
                 ? 'Ingresar'
                 : modo === 'registro'
                 ? 'Crear mi cuenta'
-                : modo === 'recuperar_correo'
-                ? 'Enviar código al correo'
-                : 'Verificar código y guardar contraseña'}
+                : modo === 'recuperar'
+                ? 'Enviar enlace de recuperación'
+                : 'Guardar nueva contraseña'}
             </button>
-
-            {modo === 'recuperar_correo' && (
-              <button
-                type="button"
-                onClick={() => setModo('recuperar_codigo')}
-                style={{ background: 'none', border: 'none', fontSize: 12, color: '#94a3b8', cursor: 'pointer', textDecoration: 'underline' }}>
-                Ya tengo un código de verificación
-              </button>
-            )}
           </form>
         </div>
 
