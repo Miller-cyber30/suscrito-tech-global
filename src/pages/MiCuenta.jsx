@@ -6,6 +6,23 @@ import Navbar from '../components/Navbar'
 import { Camera, Clock, RefreshCw, Save, PlusCircle, X, CheckCircle, Link2, Lock, Eye, EyeOff } from 'lucide-react'
 import toast from 'react-hot-toast'
 
+// Formatea cualquier fecha siempre como DD/MM/AAAA (año al final)
+function formatearFecha(valor) {
+  if (!valor) return 'N/A'
+  const str = String(valor).trim()
+  const soloFecha = str.split('T')[0]
+  if (/^\d{4}-\d{2}-\d{2}$/.test(soloFecha)) {
+    const [anio, mes, dia] = soloFecha.split('-')
+    return `${dia}/${mes}/${anio}`
+  }
+  const d = new Date(str)
+  if (isNaN(d.getTime())) return str
+  const dia = String(d.getDate()).padStart(2, '0')
+  const mes = String(d.getMonth() + 1).padStart(2, '0')
+  const anio = d.getFullYear()
+  return `${dia}/${mes}/${anio}`
+}
+
 export default function MiCuenta() {
   const { usuario, perfil, setPerfil } = useAuth()
   const navigate = useNavigate()
@@ -25,7 +42,6 @@ export default function MiCuenta() {
   const [guardando, setGuardando]             = useState(false)
   const [subiendo, setSubiendo]               = useState(false)
 
-  // Estados para cambiar contraseña verificando la contraseña anterior
   const [passActual, setPassActual]           = useState('')
   const [passNueva, setPassNueva]             = useState('')
   const [passConfirmar, setPassConfirmar]     = useState('')
@@ -118,7 +134,6 @@ export default function MiCuenta() {
       const nuevaUrl = pub.publicUrl
       setAvatarUrl(nuevaUrl)
 
-      // Guarda inmediatamente la foto en la tabla perfiles con upsert
       const { data: perfilActualizado, error: errPerfil } = await supabase
         .from('perfiles')
         .upsert({
@@ -176,7 +191,6 @@ export default function MiCuenta() {
 
     setCambiandoPass(true)
     try {
-      // 1. Verifica que la contraseña anterior sea la correcta
       const { error: errCheck } = await supabase.auth.signInWithPassword({
         email: usuario.email,
         password: passActual
@@ -186,7 +200,6 @@ export default function MiCuenta() {
         return toast.error('Tu contraseña anterior es incorrecta ❌')
       }
 
-      // 2. Actualiza a la nueva contraseña
       const { error: errUpd } = await supabase.auth.updateUser({
         password: passNueva
       })
@@ -210,23 +223,23 @@ export default function MiCuenta() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: 'radial-gradient(circle at top, #1e1b4b, #0f172a 70%)', color: '#f8fafc' }}>
+    <div style={{ minHeight: '100vh', background: 'radial-gradient(circle at top, #151934, #070a12 70%)', color: '#f8fafc' }}>
       <Navbar />
-      <div style={{ maxWidth: 860, margin: '0 auto', padding: '28px 16px' }}>
-        <h1 style={{ fontFamily: 'var(--fuente-display)', fontSize: 26, fontWeight: 800, marginBottom: 20 }}>
+      <div style={{ maxWidth: 880, margin: '0 auto', padding: '32px 16px' }}>
+        <h1 style={{ fontFamily: 'var(--fuente-display)', fontSize: 28, fontWeight: 800, marginBottom: 22 }}>
           Mi Cuenta y Suscripciones<span style={{ color: '#06b6d4' }}>.</span>
         </h1>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20, alignItems: 'start' }}>
-          {/* Columna Izquierda: Datos del Perfil + Cambio de Contraseña */}
+          {/* Columna Izquierda: Perfil y Contraseña */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-            <div className="card" style={{ padding: 22, background: 'rgba(30,41,59,0.85)', color: '#fff', border: '1px solid rgba(124, 58, 237, 0.3)' }}>
+            <div className="card" style={{ padding: 22, background: '#0f1523', color: '#fff', border: '1px solid #1e293b' }}>
               <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>Datos de tu Perfil</h2>
               <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
                 {avatarUrl ? (
                   <img src={avatarUrl} alt="Avatar" style={{ width: 64, height: 64, borderRadius: '50%', objectFit: 'cover', border: '2px solid #06b6d4' }} />
                 ) : (
-                  <div style={{ width: 64, height: 64, borderRadius: '50%', background: '#7c3aed', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, fontWeight: 800 }}>
+                  <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'linear-gradient(135deg, #7c3aed, #06b6d4)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, fontWeight: 800 }}>
                     {(nombre || usuario?.email || 'U')[0].toUpperCase()}
                   </div>
                 )}
@@ -235,7 +248,7 @@ export default function MiCuenta() {
                   <button onClick={() => fileRef.current.click()} disabled={subiendo} className="btn-ghost" style={{ fontSize: 12, color: '#06b6d4' }}>
                     <Camera size={14} /> {subiendo ? 'Subiendo...' : 'Cambiar foto'}
                   </button>
-                  <p style={{ fontSize: 11, opacity: 0.7, marginTop: 4 }}>{usuario?.email}</p>
+                  <p style={{ fontSize: 11.5, color: '#94a3b8', marginTop: 4 }}>{usuario?.email}</p>
                 </div>
               </div>
 
@@ -248,19 +261,18 @@ export default function MiCuenta() {
                   <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>WhatsApp</label>
                   <input value={telefono} onChange={e => setTelefono(e.target.value)} placeholder="Ej: 987654321" />
                 </div>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, cursor: 'pointer' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, cursor: 'pointer', color: '#cbd5e1' }}>
                   <input type="checkbox" checked={recibirAlertas} onChange={e => setRecibirAlertas(e.target.checked)} style={{ width: 16, height: 16 }} />
                   Recibir avisos cuando mi servicio esté próximo a vencer
                 </label>
 
-                <button onClick={guardarPerfil} disabled={guardando} className="btn-primary" style={{ justifyContent: 'center', marginTop: 6, background: 'linear-gradient(135deg, #7c3aed, #06b6d4)', border: 'none' }}>
+                <button onClick={guardarPerfil} disabled={guardando} className="btn-primary" style={{ justifyContent: 'center', marginTop: 6 }}>
                   <Save size={15} /> {guardando ? 'Guardando...' : 'Guardar configuración'}
                 </button>
               </div>
             </div>
 
-            {/* Tarjeta de Actualizar Contraseña */}
-            <div className="card" style={{ padding: 22, background: 'rgba(30,41,59,0.85)', color: '#fff', border: '1px solid rgba(124, 58, 237, 0.3)' }}>
+            <div className="card" style={{ padding: 22, background: '#0f1523', color: '#fff', border: '1px solid #1e293b' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
                 <h2 style={{ fontSize: 16, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
                   <Lock size={17} color="#06b6d4" /> Actualizar Contraseña
@@ -306,15 +318,15 @@ export default function MiCuenta() {
                   type="submit"
                   disabled={cambiandoPass}
                   className="btn-primary"
-                  style={{ justifyContent: 'center', marginTop: 4, background: 'linear-gradient(135deg, #7c3aed, #06b6d4)', border: 'none' }}>
+                  style={{ justifyContent: 'center', marginTop: 4 }}>
                   <Lock size={15} /> {cambiandoPass ? 'Actualizando...' : 'Actualizar contraseña'}
                 </button>
               </form>
             </div>
           </div>
 
-          {/* Columna Derecha: Suscripciones y Solicitud de Asociación */}
-          <div className="card" style={{ padding: 22, background: 'rgba(30,41,59,0.85)', color: '#fff', border: '1px solid rgba(124, 58, 237, 0.3)' }}>
+          {/* Columna Derecha: Suscripciones con fechas DD/MM/AAAA */}
+          <div className="card" style={{ padding: 22, background: '#0f1523', color: '#fff', border: '1px solid #1e293b' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
               <h2 style={{ fontSize: 16, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
                 <Clock size={18} color="#06b6d4" /> Mis Servicios y Vencimientos
@@ -322,14 +334,14 @@ export default function MiCuenta() {
               <button
                 onClick={() => setModalAsociar(true)}
                 className="btn-primary"
-                style={{ fontSize: 11, padding: '6px 12px', background: 'linear-gradient(135deg, #7c3aed, #06b6d4)', border: 'none', gap: 5 }}>
+                style={{ fontSize: 11.5, padding: '7px 14px', borderRadius: 999, gap: 5 }}>
                 <PlusCircle size={14} /> Asociar producto
               </button>
             </div>
 
             {misServicios.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '24px 10px' }}>
-                <p style={{ fontSize: 13, opacity: 0.75, marginBottom: 12 }}>
+                <p style={{ fontSize: 13, color: '#94a3b8', marginBottom: 12 }}>
                   Aún no tienes servicios vinculados a tu cuenta. Si ya compraste un servicio con otro correo o por WhatsApp, solicítanos asociarlo aquí:
                 </p>
                 <button
@@ -340,31 +352,31 @@ export default function MiCuenta() {
                 </button>
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 {misServicios.map(s => {
                   const dias = diasRestantes(s.fecha_vencimiento)
                   const porVencer = dias <= 5
                   return (
-                    <div key={s.id} style={{ padding: 12, borderRadius: 10, border: `1px solid ${porVencer ? '#f87171' : 'rgba(148,163,184,0.3)'}`, background: porVencer ? 'rgba(239,68,68,0.1)' : 'rgba(15,23,42,0.3)' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <p style={{ fontWeight: 700, fontSize: 14 }}>{s.nombre_producto}</p>
-                        <span style={{ fontSize: 10, fontWeight: 800, padding: '3px 8px', borderRadius: 12, background: porVencer ? '#ef4444' : '#10b981', color: '#fff' }}>
+                    <div key={s.id} style={{ padding: 14, borderRadius: 12, border: `1px solid ${porVencer ? '#ef4444' : '#1e293b'}`, background: porVencer ? 'rgba(239,68,68,0.08)' : '#070a12' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                        <p style={{ fontFamily: 'var(--fuente-display)', fontWeight: 700, fontSize: 15 }}>{s.nombre_producto}</p>
+                        <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 999, background: porVencer ? '#ef4444' : '#10b981', color: '#fff', fontVariantNumeric: 'tabular-nums' }}>
                           {dias < 0 ? 'Vencido' : `${dias} días restantes`}
                         </span>
                       </div>
                       {s.cliente_correo && (
-                        <p style={{ fontSize: 11, color: '#38bdf8', marginTop: 3 }}>
+                        <p style={{ fontSize: 12, color: '#38bdf8', marginTop: 4 }}>
                           ✉️ Cuenta: {s.cliente_correo}
                         </p>
                       )}
-                      <p style={{ fontSize: 11, opacity: 0.8, marginTop: 4 }}>
-                        📅 Adquirido: {s.ventas?.created_at ? new Date(s.ventas.created_at).toLocaleDateString('es-PE') : 'N/A'} · ⏳ <b>Vence: {s.fecha_vencimiento || 'N/A'}</b>
+                      <p style={{ fontSize: 12, color: '#cbd5e1', marginTop: 6, fontVariantNumeric: 'tabular-nums' }}>
+                        📅 Adquirido: <b>{formatearFecha(s.ventas?.created_at)}</b> &nbsp;·&nbsp; ⏳ <b>Vence: {formatearFecha(s.fecha_vencimiento)}</b>
                       </p>
                       <a
                         href={`https://wa.me/51924545856?text=${encodeURIComponent(`¡Hola SuscriTech Global! 🚀 Quiero renovar mi servicio de *${s.nombre_producto}* (${s.cliente_correo || usuario.email})`)}`}
                         target="_blank" rel="noopener noreferrer"
-                        style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 8, fontSize: 11, fontWeight: 700, color: '#06b6d4', textDecoration: 'none' }}>
-                        <RefreshCw size={12} /> Solicitar Renovación por WhatsApp →
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 10, fontSize: 12, fontWeight: 700, color: '#06b6d4', textDecoration: 'none' }}>
+                        <RefreshCw size={13} /> Solicitar Renovación por WhatsApp →
                       </a>
                     </div>
                   )
@@ -373,13 +385,13 @@ export default function MiCuenta() {
             )}
 
             {misSolicitudes.length > 0 && (
-              <div style={{ marginTop: 18, borderTop: '1px solid rgba(148,163,184,0.2)', paddingTop: 14 }}>
+              <div style={{ marginTop: 18, borderTop: '1px solid #1e293b', paddingTop: 14 }}>
                 <p style={{ fontSize: 12, fontWeight: 700, color: '#94a3b8', marginBottom: 8 }}>
                   Solicitudes de asociación enviadas:
                 </p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {misSolicitudes.map(sol => (
-                    <div key={sol.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', borderRadius: 8, background: 'rgba(15,23,42,0.45)', fontSize: 12 }}>
+                    <div key={sol.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', borderRadius: 8, background: '#070a12', fontSize: 12 }}>
                       <div>
                         <span style={{ fontWeight: 600 }}>{sol.productos?.nombre || 'Servicio'}</span>
                         {sol.correo_referencia && <span style={{ color: '#94a3b8', fontSize: 11, display: 'block' }}>Dato: {sol.correo_referencia}</span>}
@@ -402,8 +414,8 @@ export default function MiCuenta() {
 
       {/* Modal para Solicitar Asociación de Producto */}
       {modalAsociar && (
-        <div onClick={() => setModalAsociar(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-          <div onClick={e => e.stopPropagation()} className="card" style={{ width: '100%', maxWidth: 440, padding: 24, background: '#0f172a', color: '#fff', border: '1px solid #06b6d4' }}>
+        <div onClick={() => setModalAsociar(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.72)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div onClick={e => e.stopPropagation()} className="card" style={{ width: '100%', maxWidth: 440, padding: 24, background: '#0f1523', color: '#fff', border: '1px solid #06b6d4' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
               <h3 style={{ fontFamily: 'var(--fuente-display)', fontSize: 18, fontWeight: 800, color: '#06b6d4' }}>
                 Asociar Servicio Adquirido
@@ -411,7 +423,7 @@ export default function MiCuenta() {
               <button onClick={() => setModalAsociar(false)} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}><X size={20} /></button>
             </div>
 
-            <p style={{ fontSize: 12, color: '#cbd5e1', marginBottom: 16, lineHeight: 1.5 }}>
+            <p style={{ fontSize: 12.5, color: '#cbd5e1', marginBottom: 16, lineHeight: 1.5 }}>
               Selecciona el servicio que adquiriste con nosotros para vincularlo a tu cuenta y ver tus días restantes de suscripción.
             </p>
 
@@ -441,7 +453,7 @@ export default function MiCuenta() {
                 <button type="button" onClick={() => setModalAsociar(false)} className="btn-ghost" style={{ flex: 1, justifyContent: 'center' }}>
                   Cancelar
                 </button>
-                <button type="submit" disabled={enviandoSol} className="btn-primary" style={{ flex: 1, justifyContent: 'center', background: 'linear-gradient(135deg, #7c3aed, #06b6d4)', border: 'none' }}>
+                <button type="submit" disabled={enviandoSol} className="btn-primary" style={{ flex: 1, justifyContent: 'center' }}>
                   <CheckCircle size={15} /> {enviandoSol ? 'Enviando...' : 'Enviar solicitud'}
                 </button>
               </div>
