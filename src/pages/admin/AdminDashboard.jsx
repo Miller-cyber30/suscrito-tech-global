@@ -5,18 +5,32 @@ import Paginador from '../../components/Paginador'
 import { Package, Tag, ShoppingBag, Clock, Users, Key, ChevronDown, ChevronUp, Send, Copy, RefreshCw, CheckCircle, Cpu } from 'lucide-react'
 import toast from 'react-hot-toast'
 
+function formatearFecha(valor) {
+  if (!valor) return 'N/A'
+  const str = String(valor).trim()
+  const soloFecha = str.split('T')[0]
+  if (/^\d{4}-\d{2}-\d{2}$/.test(soloFecha)) {
+    const [anio, mes, dia] = soloFecha.split('-')
+    return `${dia}/${mes}/${anio}`
+  }
+  const d = new Date(str)
+  if (isNaN(d.getTime())) return str
+  const dia = String(d.getDate()).padStart(2, '0')
+  const mes = String(d.getMonth() + 1).padStart(2, '0')
+  const anio = d.getFullYear()
+  return `${dia}/${mes}/${anio}`
+}
+
 export default function AdminDashboard() {
   const { modoOscuro } = useTienda()
 
   const [stats, setStats]               = useState({ productos: 0, categorias: 0, ventas_hoy: 0, total_hoy: 0 })
   const [cargando, setCargando]         = useState(true)
 
-  // Paginador (50 por defecto)
   const [paginaActual, setPaginaActual]     = useState(1)
   const [itemsPorPagina, setItemsPorPagina] = useState(50)
 
-  // Vencimientos de Usuarios y Cuentas Madre
-  const [vistaPanel, setVistaPanel]       = useState('usuarios') // 'usuarios' | 'servicios'
+  const [vistaPanel, setVistaPanel]       = useState('usuarios')
   const [suscripciones, setSuscripciones] = useState([])
   const [cuentasMadre, setCuentasMadre]   = useState([])
   const [expandidoId, setExpandidoId]     = useState(null)
@@ -81,7 +95,8 @@ export default function AdminDashboard() {
 
   const generarTextoRenovacion = (item) => {
     const dias = calcularDiasRestantes(item.fecha_vencimiento)
-    const estadoTexto = dias < 0 ? `venció el *${item.fecha_vencimiento}*` : `está a punto de vencer el *${item.fecha_vencimiento}* (en ${dias} días)`
+    const fechaFormateada = formatearFecha(item.fecha_vencimiento)
+    const estadoTexto = dias < 0 ? `venció el *${fechaFormateada}*` : `está a punto de vencer el *${fechaFormateada}* (en ${dias} días)`
     return `¡Hola *${item.cliente_nombre || 'estimado(a)'}*! 👋 Te saluda *SuscriTech Global*.\n\nTe escribimos para comentarte que tu servicio de *${item.nombre_producto}* asociado al correo (${item.cliente_correo || 'tu cuenta'}) ${estadoTexto}.\n\nPor favor, para no perder el servicio ni tus beneficios activos, coméntame por aquí para renovar tu plan (3, 6 o 12 meses). ¡Quedo atento! 🚀`
   }
 
@@ -97,7 +112,7 @@ export default function AdminDashboard() {
     }).eq('id', item.id)
 
     if (error) return toast.error('Error al renovar')
-    toast.success(`¡Servicio renovado hasta el ${nuevaFecha}! 🎉`)
+    toast.success(`¡Servicio renovado hasta el ${formatearFecha(nuevaFecha)}! 🎉`)
     setModalRenovar(null)
     cargar()
   }
@@ -105,12 +120,11 @@ export default function AdminDashboard() {
   const limiteValido  = Math.max(1, Number(itemsPorPagina) || 50)
   const subsPaginadas = suscripciones.slice((paginaActual - 1) * limiteValido, paginaActual * limiteValido)
 
-  // Colores adaptativos para Modo Oscuro y Claro
-  const bgFila          = modoOscuro ? '#1e293b' : '#ffffff'
-  const bgFilaUrgente   = modoOscuro ? 'rgba(239, 68, 68, 0.14)' : '#fef2f2'
-  const bgDetalle       = modoOscuro ? '#0f172a' : '#f8fafc'
-  const bgCajaDato      = modoOscuro ? '#1e293b' : '#ffffff'
-  const bordeFila       = modoOscuro ? '#334155' : 'var(--borde)'
+  const bgFila          = modoOscuro ? '#0f1523' : '#ffffff'
+  const bgFilaUrgente   = modoOscuro ? 'rgba(239, 68, 68, 0.12)' : '#fef2f2'
+  const bgDetalle       = modoOscuro ? '#070a12' : '#f8fafc'
+  const bgCajaDato      = modoOscuro ? '#0f1523' : '#ffffff'
+  const bordeFila       = modoOscuro ? '#1e293b' : 'var(--borde)'
   const textoPrincipal  = modoOscuro ? '#f8fafc' : '#0f172a'
   const textoSecundario = modoOscuro ? '#94a3b8' : '#64748b'
 
@@ -129,7 +143,6 @@ export default function AdminDashboard() {
         <Cpu size={24} color="#7c3aed" /> Dashboard SuscriTech Global<span style={{ color: '#06b6d4' }}>.</span>
       </h1>
 
-      {/* Cards superiores */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 14, marginBottom: 28 }}>
         {cards.map(({ label, valor, icon: Icon, color }) => (
           <div key={label} className="card" style={{ padding: '18px 20px' }}>
@@ -139,7 +152,7 @@ export default function AdminDashboard() {
                 <Icon size={18} color={color} />
               </div>
             </div>
-            <p style={{ fontFamily: 'var(--fuente-display)', fontSize: 26, fontWeight: 800, color: 'var(--texto)' }}>{valor}</p>
+            <p style={{ fontFamily: 'var(--fuente-cuerpo)', fontVariantNumeric: 'tabular-nums', fontSize: 26, fontWeight: 800, color: 'var(--texto)' }}>{valor}</p>
           </div>
         ))}
       </div>
@@ -191,14 +204,13 @@ export default function AdminDashboard() {
                       overflow: 'hidden',
                       transition: '0.2s'
                     }}>
-                      {/* Cabecera de la fila */}
                       <div
                         onClick={() => setExpandidoId(expandido ? null : s.id)}
                         style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', gap: 12 }}
                       >
                         <div style={{ minWidth: 0 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                            <span style={{ fontWeight: 800, fontSize: 15, color: textoPrincipal }}>
+                            <span style={{ fontWeight: 700, fontSize: 15, color: textoPrincipal }}>
                               {s.cliente_nombre || 'Cliente sin nombre'}
                             </span>
                             <span style={{
@@ -210,7 +222,7 @@ export default function AdminDashboard() {
                             </span>
                           </div>
                           <p style={{ fontSize: 12, color: textoSecundario, marginTop: 5 }}>
-                            ✉️ {s.cliente_correo || 'Sin correo'} &nbsp;·&nbsp; 📱 {s.cliente_whatsapp || 'Sin WhatsApp'} &nbsp;·&nbsp; 🌐 {s.plataforma_venta || 'WhatsApp'}
+                            ✉️ {s.cliente_correo || 'Sin correo'} &nbsp;·&nbsp; 📱 {s.cliente_whatsapp || 'Sin WhatsApp'} &nbsp;·&nbsp; ⏳ Vence: <b>{formatearFecha(s.fecha_vencimiento)}</b>
                           </p>
                         </div>
 
@@ -225,21 +237,20 @@ export default function AdminDashboard() {
                         </div>
                       </div>
 
-                      {/* Panel desplegable */}
                       {expandido && (
                         <div style={{ padding: '16px', background: bgDetalle, borderTop: `1px solid ${bordeFila}` }}>
                           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(145px, 1fr))', gap: 10, marginBottom: 14 }}>
                             <div style={{ background: bgCajaDato, padding: '10px 12px', borderRadius: 8, border: `1px solid ${bordeFila}` }}>
                               <span style={{ fontSize: 11, color: textoSecundario, display: 'block', marginBottom: 3 }}>📅 Fecha de Compra</span>
                               <strong style={{ fontSize: 13, color: textoPrincipal }}>
-                                {s.ventas?.created_at ? new Date(s.ventas.created_at).toLocaleDateString('es-PE') : 'N/A'}
+                                {formatearFecha(s.ventas?.created_at)}
                               </strong>
                             </div>
 
                             <div style={{ background: bgCajaDato, padding: '10px 12px', borderRadius: 8, border: `1px solid ${bordeFila}` }}>
                               <span style={{ fontSize: 11, color: textoSecundario, display: 'block', marginBottom: 3 }}>⏳ Fecha de Vencimiento</span>
                               <strong style={{ fontSize: 13, color: '#f87171' }}>
-                                {s.fecha_vencimiento}
+                                {formatearFecha(s.fecha_vencimiento)}
                               </strong>
                             </div>
 
@@ -253,7 +264,7 @@ export default function AdminDashboard() {
                             <div style={{ background: bgCajaDato, padding: '10px 12px', borderRadius: 8, border: `1px solid ${bordeFila}` }}>
                               <span style={{ fontSize: 11, color: textoSecundario, display: 'block', marginBottom: 3 }}>⚡ Tiempo Contratado</span>
                               <strong style={{ fontSize: 13, color: '#38bdf8' }}>
-                                {s.duracion_meses || 1} meses
+                                {s.duracion_meses || 1} {Number(s.duracion_meses || 1) === 1 ? 'mes' : 'meses'}
                               </strong>
                             </div>
 
@@ -269,7 +280,7 @@ export default function AdminDashboard() {
                             <button
                               onClick={() => setModalRenovar(s)}
                               className="btn-primary"
-                              style={{ background: 'linear-gradient(135deg, #7c3aed, #06b6d4)', border: 'none', fontSize: 12, padding: '9px 16px' }}
+                              style={{ fontSize: 12, padding: '9px 16px' }}
                             >
                               <RefreshCw size={14} /> Renovar / Ver Mensaje para Usuario
                             </button>
@@ -292,7 +303,6 @@ export default function AdminDashboard() {
             </>
           )
         ) : (
-          /* Vista de Servicios / Cuentas Madre Próximas a Vencer */
           cuentasMadre.length === 0 ? (
             <p style={{ textAlign: 'center', padding: '30px 0', color: textoSecundario, fontSize: 13 }}>
               No hay cuentas madre o servicios registrados en Compras todavía.
@@ -320,7 +330,7 @@ export default function AdminDashboard() {
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         <span style={{ fontSize: 11, fontWeight: 700, padding: '5px 12px', borderRadius: 20, background: dias <= 7 ? '#ef4444' : '#0891b2', color: '#fff' }}>
-                          Vence: {m.fecha_vencimiento || 'Sin fecha'} ({dias}d)
+                          Vence: {formatearFecha(m.fecha_vencimiento)} ({dias}d)
                         </span>
                         {expandido ? <ChevronUp size={18} color={textoSecundario} /> : <ChevronDown size={18} color={textoSecundario} />}
                       </div>
@@ -347,7 +357,7 @@ export default function AdminDashboard() {
                           </div>
                           <div style={{ background: bgCajaDato, padding: '10px 12px', borderRadius: 8, border: `1px solid ${bordeFila}` }}>
                             <span style={{ fontSize: 11, color: textoSecundario, display: 'block', marginBottom: 3 }}>📅 Fecha Compra</span>
-                            <strong style={{ fontSize: 13, color: textoPrincipal }}>{m.fecha_compra}</strong>
+                            <strong style={{ fontSize: 13, color: textoPrincipal }}>{formatearFecha(m.fecha_compra)}</strong>
                           </div>
                         </div>
                       </div>
@@ -359,7 +369,6 @@ export default function AdminDashboard() {
           )
         )}
 
-        {/* Modal para Enviar Mensaje de Renovación y Extender Fecha */}
         {modalRenovar && (
           <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
             <div className="card" style={{ width: '100%', maxWidth: 500, padding: 24, border: `1px solid ${bordeFila}` }}>
@@ -399,7 +408,7 @@ export default function AdminDashboard() {
                     <option value={6}>+ 6 Meses (S/ 5)</option>
                     <option value={12}>+ 12 Meses (S/ 8)</option>
                   </select>
-                  <button onClick={() => confirmarRenovacionRapida(modalRenovar)} className="btn-primary" style={{ background: '#7c3aed', border: 'none' }}>
+                  <button onClick={() => confirmarRenovacionRapida(modalRenovar)} className="btn-primary">
                     <CheckCircle size={15} /> Renovar
                   </button>
                 </div>
