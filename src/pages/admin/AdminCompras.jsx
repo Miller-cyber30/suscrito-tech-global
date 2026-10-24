@@ -10,6 +10,22 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGri
 import jsPDF from 'jspdf'
 import 'jspdf-autotable'
 
+function formatearFecha(valor) {
+  if (!valor) return 'S/F'
+  const str = String(valor).trim()
+  const soloFecha = str.split('T')[0]
+  if (/^\d{4}-\d{2}-\d{2}$/.test(soloFecha)) {
+    const [anio, mes, dia] = soloFecha.split('-')
+    return `${dia}/${mes}/${anio}`
+  }
+  const d = new Date(str)
+  if (isNaN(d.getTime())) return str
+  const dia = String(d.getDate()).padStart(2, '0')
+  const mes = String(d.getMonth() + 1).padStart(2, '0')
+  const anio = d.getFullYear()
+  return `${dia}/${mes}/${anio}`
+}
+
 const estilosImpresion = `
   @media print {
     body * { visibility: hidden; }
@@ -26,11 +42,9 @@ export default function AdminCompras() {
   const [productosDB, setProductosDB]           = useState([])
   const [comprasHistorial, setComprasHistorial] = useState([])
 
-  // Paginador (50 por defecto)
   const [paginaActual, setPaginaActual]     = useState(1)
   const [itemsPorPagina, setItemsPorPagina] = useState(50)
 
-  // Formulario de Compra de Cuentas Madre / Servicios en SuscriTech Global
   const [formServicio, setFormServicio] = useState({
     producto_servicio_id: '',
     servicio_nombre: '',
@@ -91,7 +105,6 @@ export default function AdminCompras() {
     setCargando(false)
   }
 
-  // GUARDAR COMPRA DE SERVICIO / CUENTA MADRE (SUSCRITECH GLOBAL)
   const guardarCompraSuscriTech = async () => {
     if (!formServicio.producto_servicio_id && !formServicio.servicio_nombre.trim()) {
       return toast.error('Selecciona el servicio comprado')
@@ -246,18 +259,17 @@ export default function AdminCompras() {
            (c.cuenta_correo || '').toLowerCase().includes(t) ||
            (c.ruc || '').toLowerCase().includes(t) ||
            (c.numero_comprobante || '').toLowerCase().includes(t) ||
-           (c.total || '').toString().includes(t) ||
-           c.compra_items?.some(i => (i.nombre_original || '').toLowerCase().includes(t) || (i.productos?.nombre || '').toLowerCase().includes(t))
+           (c.total || '').toString().includes(t)
   })
 
   const limiteValido = Math.max(1, Number(itemsPorPagina) || 50)
   const comprasPaginadasHistorial = comprasFiltradasHistorial.slice((paginaActual - 1) * limiteValido, paginaActual * limiteValido)
 
   const exportarTXT = () => {
-    let contenido = `HISTORIAL DE COMPRAS / CUENTAS MADRE (SUSCRITECH GLOBAL)\nDesde: ${desde} - Hasta: ${hasta}\n\n`
+    let contenido = `HISTORIAL DE COMPRAS / CUENTAS MADRE (SUSCRITECH GLOBAL)\nDesde: ${formatearFecha(desde)} - Hasta: ${formatearFecha(hasta)}\n\n`
     comprasFiltradasHistorial.forEach(c => {
       contenido += `========================================================================\n`
-      contenido += `FECHA: ${c.fecha_compra} | SERVICIO: ${c.servicio_nombre || 'N/A'} | PROVEEDOR: ${c.empresa} | CUENTA: ${c.cuenta_correo || c.numero_comprobante} | TOTAL: S/ ${Number(c.total).toFixed(2)}\n`
+      contenido += `FECHA: ${formatearFecha(c.fecha_compra)} | VENCE: ${formatearFecha(c.fecha_vencimiento)} | SERVICIO: ${c.servicio_nombre || 'N/A'} | PROVEEDOR: ${c.empresa} | CUENTA: ${c.cuenta_correo || c.numero_comprobante} | TOTAL: S/ ${Number(c.total).toFixed(2)}\n`
     })
     const blob = new Blob([contenido], { type: 'text/plain' })
     const link = document.createElement('a')
@@ -269,7 +281,7 @@ export default function AdminCompras() {
   const exportarCSV = () => {
     let contenido = `Fecha,Servicio,Proveedor,WhatsApp_Proveedor,Cuenta_Correo,Cupos,Vencimiento,Total\n`
     comprasFiltradasHistorial.forEach(c => {
-      contenido += `"${c.fecha_compra}","${c.servicio_nombre || ''}","${c.empresa}","${c.proveedor_whatsapp || c.ruc}","${c.cuenta_correo || c.numero_comprobante}","${c.cupos_usados || 0}/${c.cupos_totales || 1}","${c.fecha_vencimiento || ''}",${Number(c.total).toFixed(2)}\n`
+      contenido += `"${formatearFecha(c.fecha_compra)}","${c.servicio_nombre || ''}","${c.empresa}","${c.proveedor_whatsapp || c.ruc}","${c.cuenta_correo || c.numero_comprobante}","${c.cupos_usados || 0}/${c.cupos_totales || 1}","${formatearFecha(c.fecha_vencimiento)}",${Number(c.total).toFixed(2)}\n`
     })
     const blob = new Blob(['\uFEFF' + contenido], { type: 'text/csv;charset=utf-8;' })
     const link = document.createElement('a')
@@ -282,16 +294,16 @@ export default function AdminCompras() {
     const doc = new jsPDF('landscape')
     doc.text(`Historial de Cuentas Madre / Compras - SuscriTech Global`, 14, 15)
     doc.setFontSize(10)
-    doc.text(`Desde: ${desde} - Hasta: ${hasta}`, 14, 22)
+    doc.text(`Desde: ${formatearFecha(desde)} - Hasta: ${formatearFecha(hasta)}`, 14, 22)
 
     const tableData = comprasFiltradasHistorial.map(c => [
-      c.fecha_compra,
+      formatearFecha(c.fecha_compra),
       c.servicio_nombre || 'Servicio',
       c.empresa,
       c.proveedor_whatsapp || c.ruc,
       c.cuenta_correo || c.numero_comprobante,
       `${c.cupos_usados || 0}/${c.cupos_totales || 1}`,
-      c.fecha_vencimiento || 'S/F',
+      formatearFecha(c.fecha_vencimiento),
       `S/ ${Number(c.total).toFixed(2)}`
     ])
     doc.autoTable({
@@ -306,7 +318,7 @@ export default function AdminCompras() {
   const comprasPorDia = {}
 
   comprasFiltradasHistorial.forEach(c => {
-    const dia = c.fecha_compra
+    const dia = formatearFecha(c.fecha_compra)
     if (!comprasPorDia[dia]) comprasPorDia[dia] = 0
     comprasPorDia[dia] += Number(c.total || 0)
     gastoTotal += Number(c.total || 0)
@@ -315,7 +327,6 @@ export default function AdminCompras() {
 
   const chartDiasData = Object.keys(comprasPorDia)
     .map(k => ({ Fecha: k, Inversión: parseFloat(comprasPorDia[k].toFixed(2)) }))
-    .sort((a, b) => a.Fecha.localeCompare(b.Fecha))
 
   const compraActiva = comprasHistorial.find(c => c.id === compraExpandida)
   const colorTema = '#7c3aed'
@@ -334,7 +345,6 @@ export default function AdminCompras() {
         </div>
       </div>
 
-      {/* -------------------- TAB REGISTRO DE CUENTAS MADRE (SUSCRITECH GLOBAL) -------------------- */}
       {tabActual === 'registro' && (
         <div className="card" style={{ maxWidth: 680, margin: '0 auto', padding: 24, borderTop: '4px solid #7c3aed' }}>
           <h2 style={{ fontFamily: 'var(--fuente-display)', fontSize: 18, fontWeight: 800, color: '#a855f7', marginBottom: 6 }}>
@@ -355,7 +365,7 @@ export default function AdminCompras() {
                 }}
                 style={{ width: '100%', fontSize: 13 }}>
                 <option value="">-- Selecciona el Servicio --</option>
-                {productosDB.map(p => <option key={p.id} value={p.id}>{p.nombre} (Cupos actuales: {p.stock})</option>)}
+                {productosDB.map(p => <option key={p.id} value={p.id}>{p.nombre} (Stock actual: {p.stock})</option>)}
               </select>
             </div>
 
@@ -390,7 +400,7 @@ export default function AdminCompras() {
             </div>
 
             <div>
-              <label style={{ fontSize: 12, fontWeight: 700, color: '#a855f7', display: 'block', marginBottom: 4 }}><Users size={12}/> Cupos Totales de Usuarios *</label>
+              <label style={{ fontSize: 12, fontWeight: 700, color: '#a855f7', display: 'block', marginBottom: 4 }}><Users size={12}/> Cupos Totales *</label>
               <input type="number" min="1" value={formServicio.cupos_totales} onChange={e => setFormServicio({ ...formServicio, cupos_totales: e.target.value })} style={{ fontWeight: 800, border: '1.5px solid #7c3aed' }} />
             </div>
 
@@ -404,28 +414,29 @@ export default function AdminCompras() {
                 <input type="number" min="1" value={formServicio.duracion_meses} onChange={e => setFormServicio({ ...formServicio, duracion_meses: e.target.value })} />
               </div>
               <div>
-                <label style={{ fontSize: 11, fontWeight: 800, color: '#06b6d4', display: 'block', marginBottom: 4 }}>Vencimiento</label>
+                <label style={{ fontSize: 11, fontWeight: 800, color: '#06b6d4', display: 'block', marginBottom: 4 }}>
+                  Vence ({formatearFecha(formServicio.fecha_vencimiento)})
+                </label>
                 <input type="date" value={formServicio.fecha_vencimiento} onChange={e => setFormServicio({ ...formServicio, fecha_vencimiento: e.target.value })} style={{ fontWeight: 700, border: '1.5px solid #06b6d4' }} />
               </div>
             </div>
 
             <div style={{ gridColumn: '1 / -1', marginTop: 6 }}>
-              <button onClick={guardarCompraSuscriTech} disabled={cargando} className="btn-primary" style={{ width: '100%', justifyContent: 'center', padding: 13, background: 'linear-gradient(135deg, #7c3aed, #06b6d4)', border: 'none' }}>
-                <Save size={16} /> {cargando ? 'Guardando...' : 'Guardar Cuenta Madre y Sumar Cupos'}
+              <button onClick={guardarCompraSuscriTech} disabled={cargando} className="btn-primary" style={{ width: '100%', justifyContent: 'center', padding: 13 }}>
+                <Save size={16} /> {cargando ? 'Guardando...' : 'Guardar Cuenta Madre y Sumar Stock'}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* -------------------- TAB HISTORIAL CON PAGINADOR -------------------- */}
       {tabActual === 'historial' && (
         <div className="no-print" style={{ display: 'flex', gap: 20, alignItems: 'flex-start', flexWrap: 'wrap' }}>
           <div style={{ flex: '1 1 48%', minWidth: 300, display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div className="card" style={{ padding: '16px 20px', display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
               <div style={{ flex: 1, minWidth: '100%', position: 'relative' }}>
                 <Search size={16} style={{ position: 'absolute', left: 12, top: 10, color: 'var(--texto-suave)' }} />
-                <input type="text" placeholder="Buscar servicio, cuenta madre o proveedor..." value={busquedaHistorial} onChange={(e) => { setBusquedaHistorial(e.target.value); setPaginaActual(1) }} style={{ width: '100%', padding: '8px 12px 8px 36px', fontSize: 13, borderRadius: 8, border: '1px solid var(--borde)' }} />
+                <input type="text" placeholder="Buscar servicio, cuenta madre o proveedor..." value={busquedaHistorial} onChange={(e) => { setBusquedaHistorial(e.target.value); setPaginaActual(1) }} style={{ width: '100%', padding: '8px 12px 8px 36px', fontSize: 13 }} />
               </div>
               <div style={{ display: 'flex', gap: 12, width: '100%' }}>
                 <input type="date" value={desde} onChange={e => setDesde(e.target.value)} style={{ flex: 1, padding: '6px 10px', fontSize: 12 }} />
@@ -438,7 +449,7 @@ export default function AdminCompras() {
               </div>
             </div>
 
-            {cargando ? <div className="spinner" style={{ margin: '40px auto' }} /> : comprasFiltradasHistorial.length === 0 ? (
+            {cargando ? <div className="spinner" /> : comprasFiltradasHistorial.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--texto-suave)' }}>Sin registros en este rango de fechas.</div>
             ) : (
               <>
@@ -456,12 +467,14 @@ export default function AdminCompras() {
                       <h3 style={{ fontSize: 14, fontWeight: 700, color: compraExpandida === c.id ? '#06b6d4' : 'var(--texto)' }}>
                         {c.servicio_nombre || 'Servicio'} · {c.empresa}
                       </h3>
-                      <p style={{ fontSize: 11, color: 'var(--texto-suave)', marginTop: 3 }}>
-                        🔑 {c.cuenta_correo || c.numero_comprobante} · 👥 Cupos: {c.cupos_usados || 0}/{c.cupos_totales || 1} · ⏳ Vence: {c.fecha_vencimiento || 'S/F'}
+                      <p style={{ fontSize: 11.5, color: 'var(--texto-suave)', marginTop: 4, fontVariantNumeric: 'tabular-nums' }}>
+                        🔑 {c.cuenta_correo || c.numero_comprobante} · 👥 Cupos: {c.cupos_usados || 0}/{c.cupos_totales || 1}
+                        <br />
+                        📅 Compra: <b>{formatearFecha(c.fecha_compra)}</b> · ⏳ Vence: <b>{formatearFecha(c.fecha_vencimiento)}</b>
                       </p>
                     </div>
                     <div style={{ textAlign: 'right' }}>
-                      <p style={{ fontSize: 16, fontWeight: 800, color: '#f87171' }}>S/ {Number(c.total).toFixed(2)}</p>
+                      <p style={{ fontSize: 16, fontWeight: 800, color: '#f87171', fontVariantNumeric: 'tabular-nums' }}>S/ {Number(c.total).toFixed(2)}</p>
                     </div>
                   </div>
                 ))}
@@ -484,20 +497,20 @@ export default function AdminCompras() {
                 <div className="no-print" style={{ position: 'absolute', top: 16, right: 16, display: 'flex', gap: 8, alignItems: 'center' }}>
                    <button onClick={() => eliminarCompra(compraActiva.id)} className="btn-ghost" title="Eliminar Registro" style={{ padding: 8, color: '#ef4444' }}><Trash2 size={16} /></button>
                    <button onClick={() => abrirEdicion(compraActiva)} className="btn-ghost" title="Editar" style={{ padding: 8, color: '#f59e0b' }}><Edit3 size={16} /></button>
-                   <button onClick={() => window.print()} className="btn-primary" style={{ padding: 8, background: '#7c3aed', border: 'none' }}><Printer size={16} /></button>
+                   <button onClick={() => window.print()} className="btn-primary" style={{ padding: 8 }}><Printer size={16} /></button>
                 </div>
                 <h2 style={{ fontSize: 18, fontWeight: 800, textTransform: 'uppercase', marginBottom: 16, color: '#06b6d4' }}>
                   Detalle de Cuenta Madre
                 </h2>
-                <div style={{ marginBottom: 20, fontSize: 13, lineHeight: '1.9' }}>
+                <div style={{ marginBottom: 20, fontSize: 13, lineHeight: '1.9', fontVariantNumeric: 'tabular-nums' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}><b>SERVICIO:</b> <span>{compraActiva.servicio_nombre || 'Servicio Digital'}</span></div>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}><b>PROVEEDOR:</b> <span>{compraActiva.empresa}</span></div>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}><b>WHATSAPP PROVEEDOR:</b> <span>{compraActiva.proveedor_whatsapp || compraActiva.ruc}</span></div>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}><b>CUENTA / CORREO:</b> <span>{compraActiva.cuenta_correo || compraActiva.numero_comprobante}</span></div>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}><b>PLATAFORMA:</b> <span>{compraActiva.plataforma_compra || 'WhatsApp'}</span></div>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}><b>CUPOS USADOS:</b> <span>{compraActiva.cupos_usados || 0} de {compraActiva.cupos_totales || 1}</span></div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}><b>FECHA COMPRA:</b> <span>{compraActiva.fecha_compra}</span></div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}><b>FECHA VENCIMIENTO:</b> <span style={{ color: '#f87171', fontWeight: 700 }}>{compraActiva.fecha_vencimiento || 'Sin fecha'}</span></div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}><b>FECHA COMPRA:</b> <span>{formatearFecha(compraActiva.fecha_compra)}</span></div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}><b>FECHA VENCIMIENTO:</b> <span style={{ color: '#f87171', fontWeight: 700 }}>{formatearFecha(compraActiva.fecha_vencimiento)}</span></div>
                 </div>
                 <div style={{ borderTop: '2px solid var(--borde)', paddingTop: 12, display: 'flex', justifyContent: 'space-between', fontWeight: 800, fontSize: 16 }}>
                   <span>COSTO TOTAL:</span><span style={{ color: '#06b6d4' }}>S/ {Number(compraActiva.total).toFixed(2)}</span>
@@ -513,18 +526,8 @@ export default function AdminCompras() {
         </div>
       )}
 
-      {/* -------------------- TAB ANÁLISIS -------------------- */}
       {tabActual === 'analisis' && (
         <div className="analisis-container no-print">
-          <div className="card" style={{ padding: '16px 20px', marginBottom: 20, display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Calendar size={16} color="var(--texto-suave)" />
-              <input type="date" value={desde} onChange={e => setDesde(e.target.value)} style={{ width: 'auto', padding: '6px 10px', fontSize: 12 }} />
-              <span>-</span>
-              <input type="date" value={hasta} onChange={e => setHasta(e.target.value)} style={{ width: 'auto', padding: '6px 10px', fontSize: 12 }} />
-            </div>
-          </div>
-
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 24 }}>
             <div className="card" style={{ padding: 20, borderTop: '3px solid #ef4444' }}>
               <p style={{ fontSize: 12, color: 'var(--texto-suave)', fontWeight: 600 }}>Total Invertido</p>
@@ -549,7 +552,7 @@ export default function AdminCompras() {
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--borde)" />
                     <XAxis dataKey="Fecha" fontSize={11} stroke="var(--texto-suave)" />
                     <YAxis fontSize={11} stroke="var(--texto-suave)" />
-                    <Tooltip cursor={{ fill: 'rgba(148,163,184,0.1)' }} contentStyle={{ borderRadius: 8, border: '1px solid var(--borde)', background: 'var(--blanco)', color: 'var(--texto)' }} />
+                    <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid var(--borde)', background: 'var(--blanco)', color: 'var(--texto)' }} />
                     <Bar dataKey="Inversión" fill="#7c3aed" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
@@ -559,7 +562,6 @@ export default function AdminCompras() {
         </div>
       )}
 
-      {/* -------------------- MODAL DE EDICIÓN DE CUENTA MADRE -------------------- */}
       {modalEdicion && datosEdicion && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
           <div className="card" style={{ width: '100%', maxWidth: 520, maxHeight: '90vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', padding: 24, borderTop: '4px solid #7c3aed' }}>
@@ -607,7 +609,7 @@ export default function AdminCompras() {
             </div>
             <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
               <button onClick={() => setModalEdicion(false)} className="btn-ghost" style={{ flex: 1, justifyContent: 'center' }}>Cancelar</button>
-              <button onClick={guardarEdicion} disabled={cargando} className="btn-primary" style={{ flex: 1, justifyContent: 'center', background: 'linear-gradient(135deg, #7c3aed, #06b6d4)', border: 'none' }}>Guardar Cambios</button>
+              <button onClick={guardarEdicion} disabled={cargando} className="btn-primary" style={{ flex: 1, justifyContent: 'center' }}>Guardar Cambios</button>
             </div>
           </div>
         </div>
