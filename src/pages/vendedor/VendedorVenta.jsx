@@ -7,8 +7,136 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
+// Formatea cualquier fecha siempre como DD/MM/AAAA (año al final)
+function formatearFecha(valor) {
+  if (!valor) return 'N/A'
+  const str = String(valor).trim()
+  const soloFecha = str.split('T')[0]
+  if (/^\d{4}-\d{2}-\d{2}$/.test(soloFecha)) {
+    const [anio, mes, dia] = soloFecha.split('-')
+    return `${dia}/${mes}/${anio}`
+  }
+  const d = new Date(str)
+  if (isNaN(d.getTime())) return str
+  const dia = String(d.getDate()).padStart(2, '0')
+  const mes = String(d.getMonth() + 1).padStart(2, '0')
+  const anio = d.getFullYear()
+  return `${dia}/${mes}/${anio}`
+}
+
+function normalizarEtiquetaPlan(texto = '') {
+  return String(texto).trim().replace(/^1\s+meses$/i, '1 mes')
+}
+
+function normalizarTexto(texto = '') {
+  return String(texto)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+}
+
+// Componente de autocompletado rápido para buscar entre miles de usuarios por nombre, correo o teléfono
+function BuscadorUsuario({ usuariosDB, seleccionadoId, onSelect }) {
+  const [texto, setTexto] = useState('')
+  const [abierto, setAbierto] = useState(false)
+
+  const usuarioActual = usuariosDB.find(u => u.id === seleccionadoId)
+
+  const sugerencias = texto.trim().length > 0
+    ? usuariosDB.filter(u => {
+        const q = normalizarTexto(texto)
+        return (
+          normalizarTexto(u.nombre).includes(q) ||
+          normalizarTexto(u.email).includes(q) ||
+          normalizarTexto(u.telefono).includes(q)
+        )
+      }).slice(0, 8)
+    : []
+
+  if (usuarioActual) {
+    return (
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+        padding: '8px 12px', borderRadius: 10,
+        background: 'rgba(124, 58, 237, 0.16)', border: '1px solid rgba(124, 58, 237, 0.45)'
+      }}>
+        <div style={{ minWidth: 0 }}>
+          <p style={{ fontSize: 12.5, fontWeight: 700, color: '#f8fafc', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            🔗 {usuarioActual.nombre || 'Usuario sin nombre'}
+          </p>
+          <p style={{ fontSize: 11, color: '#38bdf8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {usuarioActual.email} {usuarioActual.telefono ? `· ${usuarioActual.telefono}` : ''}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => { onSelect(null); setTexto('') }}
+          style={{
+            background: 'rgba(239, 68, 68, 0.2)', border: '1px solid rgba(239, 68, 68, 0.4)',
+            color: '#f87171', borderRadius: 8, padding: '4px 8px', fontSize: 11, fontWeight: 700, cursor: 'pointer', flexShrink: 0
+          }}>
+          Quitar ✕
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <Search size={14} style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: 'var(--texto-suave)' }} />
+      <input
+        value={texto}
+        onChange={e => { setTexto(e.target.value); setAbierto(true) }}
+        onFocus={() => setAbierto(true)}
+        onBlur={() => setTimeout(() => setAbierto(false), 180)}
+        placeholder="Buscar usuario por nombre o correo..."
+        style={{ paddingLeft: 32, fontSize: 12.5 }}
+      />
+      {abierto && texto.trim().length > 0 && (
+        <div style={{
+          position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0,
+          background: '#0f1523', border: '1px solid #38bdf8', borderRadius: 10,
+          maxHeight: 210, overflowY: 'auto', zIndex: 80,
+          boxShadow: '0 12px 30px rgba(0,0,0,0.55)'
+        }}>
+          {sugerencias.length === 0 ? (
+            <div style={{ padding: '10px 12px', fontSize: 12, color: '#94a3b8' }}>
+              No se encontraron usuarios con "{texto}"
+            </div>
+          ) : (
+            sugerencias.map(u => (
+              <div
+                key={u.id}
+                onMouseDown={() => {
+                  onSelect(u)
+                  setTexto('')
+                  setAbierto(false)
+                }}
+                style={{
+                  padding: '9px 12px', borderBottom: '1px solid #1e293b',
+                  cursor: 'pointer', transition: 'background 0.15s'
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(6, 182, 212, 0.15)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                <p style={{ fontSize: 12.5, fontWeight: 700, color: '#f8fafc' }}>
+                  {u.nombre || 'Sin nombre'}
+                </p>
+                <p style={{ fontSize: 11, color: '#38bdf8' }}>
+                  {u.email} {u.telefono ? `· 📱 ${u.telefono}` : ''}
+                </p>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function VendedorVenta() {
   const [productos, setProductos]             = useState([])
+  const [todosServicios, setTodosServicios]   = useState([])
   const [usuariosDB, setUsuariosDB]           = useState([])
   const [busqueda, setBusqueda]               = useState('')
   const [carrito, setCarrito]                 = useState([])
@@ -24,14 +152,14 @@ export default function VendedorVenta() {
   const [ventaCompletada, setVentaCompletada] = useState(null)
 
   // Historial de Hoy + Buscador de Ventas (requiere elegir servicio primero)
-  const [ventasHoy, setVentasHoy]                     = useState([])
-  const [servicioBusquedaId, setServicioBusquedaId]   = useState('')
-  const [textoBusquedaVenta, setTextoBusquedaVenta]   = useState('')
-  const [resultadosBusqueda, setResultadosBusqueda]   = useState([])
-  const [buscandoVentas, setBuscandoVentas]           = useState(false)
+  const [ventasHoy, setVentasHoy]                   = useState([])
+  const [servicioBusquedaId, setServicioBusquedaId] = useState('')
+  const [textoBusquedaVenta, setTextoBusquedaVenta] = useState('')
+  const [ventasDelServicio, setVentasDelServicio]   = useState([])
+  const [buscandoVentas, setBuscandoVentas]         = useState(false)
 
-  // Modal de Edición de Venta por si el vendedor se confunde al registrar
-  const [ventaEditando, setVentaEditando] = useState(null)
+  // Modal de Edición de Venta
+  const [ventaEditando, setVentaEditando]       = useState(null)
   const [guardandoEdicion, setGuardandoEdicion] = useState(false)
 
   const { perfil } = useAuth()
@@ -47,26 +175,26 @@ export default function VendedorVenta() {
       supabase
         .from('productos')
         .select('*, categorias(nombre)')
-        .eq('activo', true)
-        .gt('stock', 0)
         .order('nombre'),
       supabase
         .from('perfiles')
         .select('id, nombre, email, telefono')
         .order('nombre')
     ])
-    setProductos((prods || []).filter(p => p.tienda !== 'richard'))
+    const digitales = (prods || []).filter(p => p.tienda !== 'richard')
+    setTodosServicios(digitales)
+    setProductos(digitales.filter(p => p.activo && Number(p.stock) > 0))
     setUsuariosDB(perfs || [])
   }
 
-  // Carga ÚNICAMENTE las ventas realizadas el día de hoy
+  // Carga las ventas realizadas el día de hoy
   async function cargarVentasDeHoy() {
     const hoyInicio = new Date()
     hoyInicio.setHours(0, 0, 0, 0)
 
     const { data } = await supabase
       .from('venta_items')
-      .select('*, ventas!inner(id, created_at, total, notas, nombre_cliente, telefono_cliente, tienda)')
+      .select('*, ventas!inner(id, created_at, total, notas, nombre_cliente, telefono_cliente, tienda, vendedor_id)')
       .gte('ventas.created_at', hoyInicio.toISOString())
       .order('created_at', { ascending: false })
 
@@ -74,51 +202,81 @@ export default function VendedorVenta() {
     setVentasHoy(filtradas)
   }
 
-  // Buscador de ventas: exige seleccionar primero el servicio y luego filtra por correo, nombre o teléfono
+  // Cuando el vendedor elige un servicio en el paso 1, trae TODAS las ventas históricas de ese servicio
   useEffect(() => {
     if (!servicioBusquedaId) {
-      setResultadosBusqueda([])
+      setVentasDelServicio([])
       return
     }
-    buscarVentasPorServicio()
-  }, [servicioBusquedaId, textoBusquedaVenta])
+    cargarVentasPorServicioSeleccionado(servicioBusquedaId)
+  }, [servicioBusquedaId, todosServicios])
 
-  async function buscarVentasPorServicio() {
-    if (!servicioBusquedaId) return
+  async function cargarVentasPorServicioSeleccionado(idServicio) {
     setBuscandoVentas(true)
-    const { data } = await supabase
-      .from('venta_items')
-      .select('*, ventas(id, created_at, total, notas, nombre_cliente, telefono_cliente, tienda)')
-      .eq('producto_id', servicioBusquedaId)
-      .order('created_at', { ascending: false })
-      .limit(100)
+    const servObj = todosServicios.find(p => p.id === idServicio)
+    const nombreBase = servObj ? normalizarTexto(servObj.nombre) : ''
 
-    const termino = textoBusquedaVenta.trim().toLowerCase()
-    const filtrados = (data || []).filter(item => {
-      if (!termino) return true
-      return (
-        (item.cliente_correo || '').toLowerCase().includes(termino) ||
-        (item.cliente_nombre || item.ventas?.nombre_cliente || '').toLowerCase().includes(termino) ||
-        (item.cliente_whatsapp || item.ventas?.telefono_cliente || '').toLowerCase().includes(termino)
-      )
+    // Trae todas las ventas registradas sin importar qué vendedor o admin las realizó
+    const { data, error } = await supabase
+      .from('venta_items')
+      .select('*, ventas(id, created_at, total, notas, nombre_cliente, telefono_cliente, tienda, vendedor_id)')
+      .order('created_at', { ascending: false })
+
+    if (error) {
+      toast.error('Error al buscar ventas: ' + error.message)
+      setBuscandoVentas(false)
+      return
+    }
+
+    // Coincide por ID del servicio O por el nombre del servicio (para incluir todas las ventas migradas)
+    const delServicio = (data || []).filter(item => {
+      if (item.ventas?.tienda === 'richard') return false
+      const coincideId = item.producto_id === idServicio
+      const coincideNombre = nombreBase && normalizarTexto(item.nombre_producto).includes(nombreBase)
+      return coincideId || coincideNombre
     })
-    setResultadosBusqueda(filtrados)
+
+    setVentasDelServicio(delServicio)
     setBuscandoVentas(false)
   }
 
-  // Obtiene los planes configurados de un producto ordenados de menor a mayor precio
+  // Filtra en tiempo real por correo, nombre o WhatsApp dentro de las ventas del servicio elegido
+  const resultadosBusqueda = ventasDelServicio.filter(item => {
+    const q = normalizarTexto(textoBusquedaVenta)
+    if (!q) return true
+
+    const usuarioVinc = usuariosDB.find(u => u.id === item.cliente_usuario_id)
+
+    return (
+      normalizarTexto(item.cliente_correo).includes(q) ||
+      normalizarTexto(item.cliente_nombre).includes(q) ||
+      normalizarTexto(item.cliente_whatsapp).includes(q) ||
+      normalizarTexto(item.ventas?.nombre_cliente).includes(q) ||
+      normalizarTexto(item.ventas?.telefono_cliente).includes(q) ||
+      normalizarTexto(item.ventas?.notas).includes(q) ||
+      (usuarioVinc && (
+        normalizarTexto(usuarioVinc.nombre).includes(q) ||
+        normalizarTexto(usuarioVinc.email).includes(q) ||
+        normalizarTexto(usuarioVinc.telefono).includes(q)
+      ))
+    )
+  })
+
   function obtenerPlanesProducto(p) {
     if (Array.isArray(p.planes) && p.planes.length > 0) {
       return [...p.planes]
-        .map(pl => ({
-          duracion: pl.duracion || (pl.cantidad ? `${pl.cantidad} ${pl.unidad}` : pl.unidad) || p.unidad || '1 mes',
-          precio: Number(pl.precio ?? p.precio ?? 0)
-        }))
+        .map(pl => {
+          const raw = pl.duracion || (pl.cantidad ? `${pl.cantidad} ${pl.unidad}` : pl.unidad) || p.unidad || '1 mes'
+          return {
+            duracion: normalizarEtiquetaPlan(raw),
+            precio: Number(pl.precio ?? p.precio ?? 0)
+          }
+        })
         .filter(pl => !isNaN(pl.precio) && pl.precio > 0)
         .sort((a, b) => a.precio - b.precio)
     }
     return [{
-      duracion: p.unidad || '1 mes',
+      duracion: normalizarEtiquetaPlan(p.unidad || '1 mes'),
       precio: Number(p.precio_oferta || p.precio || 0)
     }]
   }
@@ -136,12 +294,11 @@ export default function VendedorVenta() {
 
   const productosFiltrados = busqueda.trim().length > 0
     ? productos.filter(p =>
-        p.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
+        normalizarTexto(p.nombre).includes(normalizarTexto(busqueda)) ||
         (p.codigo_barras && p.codigo_barras.includes(busqueda))
       )
     : productos
 
-  // Agrega un servicio al carrito con el plan elegido
   function agregarAlCarrito(p, planElegido = null) {
     if (p.stock < 1) return toast.error('Sin stock disponible')
     const planes = obtenerPlanesProducto(p)
@@ -267,7 +424,7 @@ export default function VendedorVenta() {
       setMontoPagado('')
       cargarDatosIniciales()
       cargarVentasDeHoy()
-      if (servicioBusquedaId) buscarVentasPorServicio()
+      if (servicioBusquedaId) cargarVentasPorServicioSeleccionado(servicioBusquedaId)
       toast.success('¡Suscripción registrada!')
     } catch (e) {
       toast.error('Error: ' + e.message)
@@ -275,7 +432,6 @@ export default function VendedorVenta() {
     setProcesando(false)
   }
 
-  // Abrir modal para editar una venta registrada
   function abrirModalEditarVenta(item) {
     setVentaEditando({
       id: item.id,
@@ -294,7 +450,6 @@ export default function VendedorVenta() {
     })
   }
 
-  // Guardar corrección de la venta editada
   async function guardarEdicionVenta(e) {
     e.preventDefault()
     if (!ventaEditando) return
@@ -335,7 +490,7 @@ export default function VendedorVenta() {
       toast.success('¡Venta actualizada correctamente! ✅')
       setVentaEditando(null)
       cargarVentasDeHoy()
-      if (servicioBusquedaId) buscarVentasPorServicio()
+      if (servicioBusquedaId) cargarVentasPorServicioSeleccionado(servicioBusquedaId)
     } catch (err) {
       toast.error('Error al actualizar: ' + err.message)
     }
@@ -411,7 +566,7 @@ export default function VendedorVenta() {
                   </div>
 
                   <div style={{ padding: '10px', display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
-                    <p style={{ fontSize: 13, fontWeight: 700, lineHeight: 1.2 }}>{p.nombre}</p>
+                    <p style={{ fontSize: 13.5, fontWeight: 700, lineHeight: 1.2 }}>{p.nombre}</p>
                     <p style={{ fontSize: 11, color: 'var(--texto-suave)' }}>Elegir plan a vender:</p>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                       {planes.map((pl, idx) => (
@@ -430,7 +585,8 @@ export default function VendedorVenta() {
                             color: 'var(--texto)',
                             fontSize: 11,
                             fontWeight: 600,
-                            cursor: 'pointer'
+                            cursor: 'pointer',
+                            fontVariantNumeric: 'tabular-nums'
                           }}>
                           <span>⚡ {pl.duracion}</span>
                           <strong style={{ color: '#06b6d4' }}>S/ {Number(pl.precio).toFixed(2)}</strong>
@@ -444,7 +600,7 @@ export default function VendedorVenta() {
           </div>
         </div>
 
-        {/* Columna Derecha: Carrito Digital con Plan y Precio Editable + Datos del Cliente */}
+        {/* Columna Derecha: Carrito Digital con Buscador de Usuarios */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {ventaCompletada ? (
             <div className="card" style={{ padding: '20px' }}>
@@ -458,7 +614,7 @@ export default function VendedorVenta() {
                   <h2 style={{ fontFamily: 'var(--fuente-display)', fontSize: 14, margin: '0 0 2px' }}>SUSCRITECH GLOBAL</h2>
                   <h3>COMPROBANTE DIGITAL</h3>
                   <p style={{ margin: '2px 0', fontSize: 11 }}>WhatsApp: 924 545 856</p>
-                  <p style={{ margin: '4px 0', fontSize: 11 }}>{new Date(ventaCompletada.created_at).toLocaleString('es-PE')}</p>
+                  <p style={{ margin: '4px 0', fontSize: 11 }}>{formatearFecha(ventaCompletada.created_at)}</p>
                 </div>
                 <div style={{ borderTop: '1px dashed var(--borde)', margin: '8px 0' }} />
                 <p style={{ margin: '2px 0' }}>Cliente: {ventaCompletada.nombre_cliente}</p>
@@ -496,7 +652,7 @@ export default function VendedorVenta() {
                 <button onClick={imprimirBoleta} className="btn-ghost" style={{ flex: 1, justifyContent: 'center', fontSize: 13 }}>
                   <Printer size={14} /> Imprimir
                 </button>
-                <button onClick={() => setVentaCompletada(null)} className="btn-primary" style={{ flex: 1, justifyContent: 'center', fontSize: 13, background: 'linear-gradient(135deg, #7c3aed, #06b6d4)', border: 'none' }}>
+                <button onClick={() => setVentaCompletada(null)} className="btn-primary" style={{ flex: 1, justifyContent: 'center', fontSize: 13 }}>
                   Nueva venta
                 </button>
               </div>
@@ -523,7 +679,6 @@ export default function VendedorVenta() {
                         </div>
 
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 110px auto', gap: 8, alignItems: 'center' }}>
-                          {/* Selector de Plan */}
                           <select
                             value={item.planDuracion}
                             onChange={e => cambiarPlanItemCarrito(item.cartId, e.target.value)}
@@ -535,7 +690,6 @@ export default function VendedorVenta() {
                             ))}
                           </select>
 
-                          {/* Precio Editable */}
                           <div style={{ position: 'relative' }}>
                             <span style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', fontSize: 11, color: '#06b6d4', fontWeight: 700 }}>S/</span>
                             <input
@@ -549,7 +703,6 @@ export default function VendedorVenta() {
                             />
                           </div>
 
-                          {/* Cantidad */}
                           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                             <button onClick={() => cambiarCantidad(item.cartId, item.cantidad - 1)}
                               style={{ width: 24, height: 24, borderRadius: 6, background: 'var(--blanco)', border: '1px solid var(--borde)', color: 'var(--texto)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -570,40 +723,34 @@ export default function VendedorVenta() {
                 {carrito.length > 0 && (
                   <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--borde)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: 15, fontWeight: 700 }}>Total</span>
-                    <span style={{ fontFamily: 'var(--fuente-display)', fontSize: 22, fontWeight: 800, color: '#06b6d4' }}>
+                    <span style={{ fontFamily: 'var(--fuente-cuerpo)', fontVariantNumeric: 'tabular-nums', fontSize: 22, fontWeight: 800, color: '#06b6d4' }}>
                       S/ {total.toFixed(2)}
                     </span>
                   </div>
                 )}
               </div>
 
-              {/* Datos del Cliente y Vinculación Opcional */}
+              {/* Datos del Cliente con Buscador de Usuarios por Nombre o Correo */}
               <div className="card" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <div>
-                  <label style={{ fontSize: 12, fontWeight: 600, marginBottom: 4, display: 'block', color: '#a855f7' }}>
+                  <label style={{ fontSize: 12, fontWeight: 600, marginBottom: 5, display: 'block', color: '#a855f7' }}>
                     <Link2 size={12} style={{ display: 'inline', marginRight: 4 }} />
                     Vincular a usuario registrado (opcional)
                   </label>
-                  <select
-                    value={usuarioVinculadoId}
-                    onChange={e => {
-                      const uid = e.target.value
-                      setUsuarioVinculadoId(uid)
-                      const u = usuariosDB.find(x => x.id === uid)
-                      if (u) {
-                        if (!nombreCliente) setNombreCliente(u.nombre || '')
-                        if (!correoCliente) setCorreoCliente(u.email || '')
-                        if (!whatsappCliente) setWhatsappCliente(u.telefono || '')
+                  <BuscadorUsuario
+                    usuariosDB={usuariosDB}
+                    seleccionadoId={usuarioVinculadoId}
+                    onSelect={u => {
+                      if (!u) {
+                        setUsuarioVinculadoId('')
+                        return
                       }
+                      setUsuarioVinculadoId(u.id)
+                      if (!nombreCliente) setNombreCliente(u.nombre || '')
+                      if (!correoCliente) setCorreoCliente(u.email || '')
+                      if (!whatsappCliente) setWhatsappCliente(u.telefono || '')
                     }}
-                    style={{ fontSize: 12 }}>
-                    <option value="">-- Cliente sin usuario web / No vincular --</option>
-                    {usuariosDB.map(u => (
-                      <option key={u.id} value={u.id}>
-                        {u.nombre || 'Usuario'} ({u.email})
-                      </option>
-                    ))}
-                  </select>
+                  />
                 </div>
 
                 <div>
@@ -636,7 +783,7 @@ export default function VendedorVenta() {
                     <span style={{ fontSize: 13, fontWeight: 500, color: vuelto >= 0 ? '#10b981' : '#ef4444' }}>
                       {vuelto >= 0 ? '💵 Vuelto:' : '⚠ Falta:'}
                     </span>
-                    <span style={{ fontFamily: 'var(--fuente-display)', fontSize: 18, fontWeight: 800, color: vuelto >= 0 ? '#10b981' : '#ef4444' }}>
+                    <span style={{ fontFamily: 'var(--fuente-cuerpo)', fontVariantNumeric: 'tabular-nums', fontSize: 18, fontWeight: 800, color: vuelto >= 0 ? '#10b981' : '#ef4444' }}>
                       S/ {Math.abs(vuelto).toFixed(2)}
                     </span>
                   </div>
@@ -651,7 +798,7 @@ export default function VendedorVenta() {
                   onClick={procesarVenta}
                   className="btn-primary"
                   disabled={procesando || carrito.length === 0}
-                  style={{ width: '100%', justifyContent: 'center', padding: '13px', fontSize: 15, borderRadius: 10, opacity: procesando || carrito.length === 0 ? 0.6 : 1, background: 'linear-gradient(135deg, #7c3aed, #06b6d4)', border: 'none' }}>
+                  style={{ width: '100%', justifyContent: 'center', padding: '13px', fontSize: 15, borderRadius: 10, opacity: procesando || carrito.length === 0 ? 0.6 : 1 }}>
                   {procesando ? 'Procesando...' : `Cobrar S/ ${total.toFixed(2)}`}
                 </button>
               </div>
@@ -660,16 +807,16 @@ export default function VendedorVenta() {
         </div>
       </div>
 
-      {/* SECCIÓN INFERIOR: VENTAS DE HOY Y BUSCADOR DE VENTAS POR SERVICIO CON EDICIÓN */}
+      {/* SECCIÓN INFERIOR: VENTAS DE HOY Y BUSCADOR GLOBAL DE VENTAS POR SERVICIO */}
       <div className="card" style={{ padding: 20, borderTop: '3px solid #7c3aed' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
           <div>
             <h3 style={{ fontFamily: 'var(--fuente-display)', fontSize: 18, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 8 }}>
               <Clock size={18} color="#06b6d4" />
-              {servicioBusquedaId ? 'Resultados de Búsqueda de Ventas' : `Ventas Registradas Hoy (${ventasHoy.length})`}
+              {servicioBusquedaId ? `Resultados de Búsqueda (${resultadosBusqueda.length})` : `Ventas Registradas Hoy (${ventasHoy.length})`}
             </h3>
             <p style={{ fontSize: 12, color: 'var(--texto-suave)' }}>
-              Por defecto se muestran solo las ventas de hoy. Para buscar una venta anterior y editarla, elige primero el servicio.
+              Por defecto se muestran las ventas de hoy. Para buscar cualquier venta anterior (de cualquier vendedor) y editarla, elige primero el servicio.
             </p>
           </div>
         </div>
@@ -688,7 +835,7 @@ export default function VendedorVenta() {
               }}
               style={{ fontSize: 13 }}>
               <option value="">-- Ver solo ventas de HOY --</option>
-              {productos.map(p => (
+              {todosServicios.map(p => (
                 <option key={p.id} value={p.id}>{p.nombre}</option>
               ))}
             </select>
@@ -705,13 +852,21 @@ export default function VendedorVenta() {
                 value={textoBusquedaVenta}
                 onChange={e => setTextoBusquedaVenta(e.target.value)}
                 placeholder={servicioBusquedaId ? 'Escribe correo, nombre o teléfono...' : 'Primero elige un servicio a la izquierda'}
-                style={{ paddingLeft: 32, fontSize: 13, opacity: servicioBusquedaId ? 1 : 0.5 }}
+                style={{ paddingLeft: 32, paddingRight: textoBusquedaVenta ? 30 : 12, fontSize: 13, opacity: servicioBusquedaId ? 1 : 0.5 }}
               />
+              {textoBusquedaVenta && (
+                <button
+                  type="button"
+                  onClick={() => setTextoBusquedaVenta('')}
+                  style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>
+                  <X size={14} />
+                </button>
+              )}
             </div>
           </div>
         </div>
 
-        {/* Lista de ventas con botón de editar */}
+        {/* Lista de ventas con botón de editar y fechas DD/MM/AAAA */}
         {buscandoVentas ? (
           <div className="spinner" />
         ) : listaParaMostrar.length === 0 ? (
@@ -722,53 +877,61 @@ export default function VendedorVenta() {
           </p>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {listaParaMostrar.map(item => (
-              <div
-                key={item.id}
-                style={{
-                  padding: '12px 14px',
-                  borderRadius: 10,
-                  background: 'var(--fondo)',
-                  border: '1px solid var(--borde)',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  flexWrap: 'wrap',
-                  gap: 10
-                }}>
-                <div style={{ flex: 1, minWidth: 220 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                    <strong style={{ fontSize: 14, color: '#06b6d4' }}>{item.nombre_producto}</strong>
-                    <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 10, background: 'rgba(124, 58, 237, 0.2)', color: '#c4b5fd', fontWeight: 600 }}>
-                      {item.duracion_meses || 1} mes(es)
-                    </span>
+            {listaParaMostrar.map(item => {
+              const uVinc = usuariosDB.find(u => u.id === item.cliente_usuario_id)
+              return (
+                <div
+                  key={item.id}
+                  style={{
+                    padding: '12px 14px',
+                    borderRadius: 10,
+                    background: 'var(--fondo)',
+                    border: '1px solid var(--borde)',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: 10
+                  }}>
+                  <div style={{ flex: 1, minWidth: 220 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <strong style={{ fontSize: 14, color: '#06b6d4' }}>{item.nombre_producto}</strong>
+                      <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 10, background: 'rgba(124, 58, 237, 0.2)', color: '#c4b5fd', fontWeight: 600 }}>
+                        {item.duracion_meses || 1} {Number(item.duracion_meses || 1) === 1 ? 'mes' : 'meses'}
+                      </span>
+                      {uVinc && (
+                        <span style={{ fontSize: 10.5, padding: '2px 8px', borderRadius: 10, background: 'rgba(16, 185, 129, 0.16)', color: '#34d399', fontWeight: 600 }}>
+                          🔗 {uVinc.nombre || uVinc.email}
+                        </span>
+                      )}
+                    </div>
+                    <p style={{ fontSize: 12.5, color: 'var(--texto)', marginTop: 4 }}>
+                      👤 <b>{item.cliente_nombre || item.ventas?.nombre_cliente || 'Cliente'}</b>
+                      {' · '}✉️ {item.cliente_correo || 'Sin correo'}
+                      {' · '}📱 {item.cliente_whatsapp || item.ventas?.telefono_cliente || 'Sin teléfono'}
+                    </p>
+                    <p style={{ fontSize: 11.5, color: 'var(--texto-suave)', marginTop: 3, fontVariantNumeric: 'tabular-nums' }}>
+                      📅 Adquirido: <b>{formatearFecha(item.ventas?.created_at || item.created_at)}</b>
+                      {' · '}⏳ Vence: <b style={{ color: '#f87171' }}>{formatearFecha(item.fecha_vencimiento)}</b>
+                      {item.ventas?.notas ? ` · 📝 ${item.ventas.notas}` : ''}
+                    </p>
                   </div>
-                  <p style={{ fontSize: 12, color: 'var(--texto)', marginTop: 4 }}>
-                    👤 <b>{item.cliente_nombre || item.ventas?.nombre_cliente || 'Cliente'}</b>
-                    {' · '}✉️ {item.cliente_correo || 'Sin correo'}
-                    {' · '}📱 {item.cliente_whatsapp || item.ventas?.telefono_cliente || 'Sin teléfono'}
-                  </p>
-                  <p style={{ fontSize: 11, color: 'var(--texto-suave)', marginTop: 2 }}>
-                    📅 Registrado: <b>{item.ventas?.created_at ? new Date(item.ventas.created_at).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : 'Hoy'}</b>
-{' · '}⏳ Vence: <b>{item.fecha_vencimiento ? item.fecha_vencimiento.split('-').reverse().join('/') : 'N/A'}</b>
-                    {item.ventas?.notas ? ` · 📝 ${item.ventas.notas}` : ''}
-                  </p>
-                </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <span style={{ fontFamily: 'var(--fuente-display)', fontSize: 16, fontWeight: 800, color: '#10b981' }}>
-                    S/ {Number(item.subtotal).toFixed(2)}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => abrirModalEditarVenta(item)}
-                    className="btn-ghost"
-                    style={{ padding: '7px 12px', fontSize: 12, color: '#06b6d4', borderColor: 'rgba(6, 182, 212, 0.4)' }}>
-                    <Edit3 size={14} /> Editar
-                  </button>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <span style={{ fontFamily: 'var(--fuente-cuerpo)', fontVariantNumeric: 'tabular-nums', fontSize: 16, fontWeight: 800, color: '#10b981' }}>
+                      S/ {Number(item.subtotal).toFixed(2)}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => abrirModalEditarVenta(item)}
+                      className="btn-ghost"
+                      style={{ padding: '7px 12px', fontSize: 12, color: '#06b6d4', borderColor: 'rgba(6, 182, 212, 0.4)' }}>
+                      <Edit3 size={14} /> Editar
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>
@@ -804,15 +967,11 @@ export default function VendedorVenta() {
                 <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4, color: '#a855f7' }}>
                   Usuario registrado vinculado (Opcional)
                 </label>
-                <select
-                  value={ventaEditando.cliente_usuario_id}
-                  onChange={e => setVentaEditando({ ...ventaEditando, cliente_usuario_id: e.target.value })}
-                  style={{ fontSize: 12 }}>
-                  <option value="">-- Sin vincular --</option>
-                  {usuariosDB.map(u => (
-                    <option key={u.id} value={u.id}>{u.nombre || 'Usuario'} ({u.email})</option>
-                  ))}
-                </select>
+                <BuscadorUsuario
+                  usuariosDB={usuariosDB}
+                  seleccionadoId={ventaEditando.cliente_usuario_id}
+                  onSelect={u => setVentaEditando({ ...ventaEditando, cliente_usuario_id: u ? u.id : '' })}
+                />
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
@@ -863,7 +1022,9 @@ export default function VendedorVenta() {
                   />
                 </div>
                 <div>
-                  <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}><Calendar size={12}/> Vencimiento</label>
+                  <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>
+                    <Calendar size={12}/> Vence ({formatearFecha(ventaEditando.fecha_vencimiento)})
+                  </label>
                   <input
                     type="date"
                     value={ventaEditando.fecha_vencimiento}
@@ -884,7 +1045,7 @@ export default function VendedorVenta() {
                 <button type="button" onClick={() => setVentaEditando(null)} className="btn-ghost" style={{ flex: 1, justifyContent: 'center' }}>
                   Cancelar
                 </button>
-                <button type="submit" disabled={guardandoEdicion} className="btn-primary" style={{ flex: 1, justifyContent: 'center', background: 'linear-gradient(135deg, #7c3aed, #06b6d4)', border: 'none' }}>
+                <button type="submit" disabled={guardandoEdicion} className="btn-primary" style={{ flex: 1, justifyContent: 'center' }}>
                   <Save size={15} /> {guardandoEdicion ? 'Guardando...' : 'Guardar corrección'}
                 </button>
               </div>
