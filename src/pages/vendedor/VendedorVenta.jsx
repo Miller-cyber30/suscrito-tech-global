@@ -749,8 +749,8 @@ export default function VendedorVenta() {
                     {' · '}📱 {item.cliente_whatsapp || item.ventas?.telefono_cliente || 'Sin teléfono'}
                   </p>
                   <p style={{ fontSize: 11, color: 'var(--texto-suave)', marginTop: 2 }}>
-                    📅 Registrado: {item.ventas?.created_at ? new Date(item.ventas.created_at).toLocaleString('es-PE') : 'Hoy'}
-                    {' · '}⏳ Vence: <b>{item.fecha_vencimiento || 'N/A'}</b>
+                    📅 Registrado: <b>{item.ventas?.created_at ? new Date(item.ventas.created_at).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : 'Hoy'}</b>
+{' · '}⏳ Vence: <b>{item.fecha_vencimiento ? item.fecha_vencimiento.split('-').reverse().join('/') : 'N/A'}</b>
                     {item.ventas?.notas ? ` · 📝 ${item.ventas.notas}` : ''}
                   </p>
                 </div>
