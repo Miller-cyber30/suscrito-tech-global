@@ -406,7 +406,7 @@ export default function AdminUsuarios() {
                       <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', borderRadius: 8, background: 'var(--blanco)', border: '1px solid var(--borde)', fontSize: 12 }}>
                         <div>
                           <strong>{c.nombre_producto}</strong> · <span style={{ color: '#06b6d4' }}>{c.cliente_correo || 'Sin correo'}</span>
-                          <span style={{ display: 'block', fontSize: 11, color: 'var(--texto-suave)' }}>Vence: {c.fecha_vencimiento || 'N/A'}</span>
+                          <span style={{ display: 'block', fontSize: 11, color: 'var(--texto-suave)' }}>Vence: {c.fecha_vencimiento ? c.fecha_vencimiento.split('-').reverse().join('/') : 'N/A'}</span>
                         </div>
                         {c.cliente_usuario_id === editando.id && (
                           <button type="button" onClick={() => desasociarVentaDeUsuario(c.id)} className="btn-danger" style={{ padding: '4px 8px', fontSize: 11 }} title="Desvincular">
